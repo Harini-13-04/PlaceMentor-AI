@@ -72,22 +72,23 @@ export default function ProfileMenu() {
               <span>My Profile</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white">
+            <button onClick={() => {navigate("/placement-readiness"); setOpen(false); }}className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white">
               <BarChart3 className="w-4 h-4" />
               <span>Placement Readiness</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white">
+            <button onClick={() => {navigate("/leaderboard");setOpen(false);}}className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white">
               <Trophy className="w-4 h-4" />
               <span>Leaderboard</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white">
+            <button onClick={() => { navigate("/weekly-goals"); setOpen(false);}}className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white"
+>
               <Target className="w-4 h-4" />
               <span>Weekly Goals</span>
             </button>
 
-            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white">
+            <button onClick={() => {navigate("/achievements");setOpen(false); }}className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all duration-200 text-white">
               <Award className="w-4 h-4" />
               <span>Achievements</span>
             </button>
