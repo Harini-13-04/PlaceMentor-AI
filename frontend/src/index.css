@@ -76,3 +76,25 @@
     box-shadow: var(--shadow-glow);
   }
 }
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.float-card {
+  animation: float 6s ease-in-out infinite;
+}
+.float-card-slow {
+  animation: float 9s ease-in-out infinite;
+}
+.glow-card:hover {
+  box-shadow: 0 0 35px rgba(139, 92, 246, 0.25);
+  transition: all 0.3s ease;
+}

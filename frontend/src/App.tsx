@@ -8,7 +8,7 @@ import Home from "./pages/Home";
 import Practice from "./pages/Practice";
 import Communication from "./pages/Communication";
 import AICopilot from "./pages/AICopilot";
-import Profile from "./pages/Profile";
+import Resume from "./pages/Resume";
 import NotFound from "./pages/NotFound";
 export { API_URL } from "./config";
 
@@ -27,7 +27,7 @@ const App = () => (
             <Route path="/practice" element={<Practice />} />
             <Route path="/communication" element={<Communication />} />
             <Route path="/copilot" element={<AICopilot />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route path="/resume" element={<Resume />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Layout>
