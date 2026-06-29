@@ -1,4 +1,5 @@
 import ProfileMenu from "./ProfileMenu";
+import StreakIndicator from "./StreakIndicator";
 import { NavLink } from "react-router-dom";
 import { Home, Code2, MessageSquare, Sparkles, Bell, FileText } from "lucide-react";
 
@@ -72,6 +73,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button className="p-2 text-muted-foreground hover:text-white transition-colors rounded-full hover:bg-white/5">
               <Bell className="w-5 h-5" />
             </button>
+           <StreakIndicator
+  streak={{
+    currentStreak: 12,
+    weekActivity: [true, true, true, true, false, false, false],
+    milestone: 15,
+    bestStreak: 21,
+    lastActiveDate: "2026-06-29",
+  }}
+/>
+
 
             {/* Profile */}
             <ProfileMenu />
