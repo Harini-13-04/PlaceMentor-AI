@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from database import db
 from models.profile import Profile, ProfileUpdate
@@ -18,7 +18,25 @@ async def get_profile():
     if profile:
         return profile
 
-    default_profile = Profile()
+    default_profile = Profile(
+        user_id=DEFAULT_USER_ID,
+        name="New Student",
+        bio="",
+        phone="",
+        email="",
+        college="",
+        dreamRole="",
+        skills=[],
+        github="",
+        linkedin="",
+        resumeScore=0,
+        level=1,
+        xp=0,
+        xpToNext=1000,
+        avatarUrl="",
+        bannerColor="#1e1b4b",
+    )
+
     await db.profiles.insert_one(default_profile.model_dump())
     return default_profile
 
@@ -30,18 +48,19 @@ async def update_profile(input: ProfileUpdate):
         {"_id": 0}
     )
 
-    profile_id = existing.get("id", "default-profile") if existing else "default-profile"
+    if not existing:
+        raise HTTPException(status_code=404, detail="Profile not found")
 
-    profile = Profile(
-        **input.model_dump(),
-        id=profile_id,
-        user_id=DEFAULT_USER_ID,
-    )
+    update_data = input.model_dump(exclude_unset=True)
 
     await db.profiles.update_one(
         {"user_id": DEFAULT_USER_ID},
-        {"$set": profile.model_dump()},
-        upsert=True,
+        {"$set": update_data}
     )
 
-    return profile
+    updated_profile = await db.profiles.find_one(
+        {"user_id": DEFAULT_USER_ID},
+        {"_id": 0}
+    )
+
+    return updated_profile
