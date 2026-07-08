@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter
 from routes.profile import router as profile_router
+from app.api.auth import router as auth_router
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -70,6 +71,8 @@ async def get_status_checks():
 # Include the router in the main app
 api_router.include_router(profile_router)
 app.include_router(api_router)
+app.include_router(auth_router)
+
 
 app.add_middleware(
     CORSMiddleware,

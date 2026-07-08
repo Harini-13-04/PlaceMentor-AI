@@ -47,7 +47,16 @@ function StreakIndicator({ streak }: { streak: Streak }) {
             : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
         }`}
       >
-        <div className="rounded-2xl p-5 backdrop-blur-2xl bg-white/[0.06] shadow-[0_8px_50px_rgba(249,115,22,0.22),0_0_50px_rgba(139,92,246,0.12),0_0_0_1px_rgba(255,255,255,0.06)]">
+        {/* Ambient glow sits behind the card, outside its edges */}
+        <div
+          className="pointer-events-none absolute -inset-4 rounded-[28px] opacity-70 blur-2xl"
+          style={{
+            background:
+              "radial-gradient(60% 60% at 20% 10%, rgba(168,85,247,0.35), transparent 70%), radial-gradient(55% 55% at 90% 90%, rgba(249,115,22,0.35), transparent 70%)",
+          }}
+        />
+
+        <div className="relative rounded-2xl p-5 backdrop-blur-2xl bg-[#0b0d14]/95 border border-white/15 shadow-[0_25px_100px_rgba(0,0,0,0.75),0_0_0_1px_rgba(255,255,255,0.04)]">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
               <Flame className="w-6 h-6 text-orange-500" />
