@@ -1,4 +1,4 @@
-import { useRef, useState, ChangeEvent } from "react";
+import { useEffect, useRef, useState, ChangeEvent } from "react";
 import {
   Github,
   Linkedin,
@@ -105,6 +105,8 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Profile>(INITIAL_PROFILE);
   const [newSkill, setNewSkill] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   // Backend-ready image state — these will eventually hold uploaded URLs
   // returned from the Spring Boot media endpoint. For now they hold local
@@ -114,15 +116,54 @@ export default function Profile() {
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+  const loadProfile = async () => {
+    try {
+      const response = await fetch("/api/profile");
+
+      if (!response.ok) {
+        throw new Error("Failed to load profile");
+      }
+
+      const data: Profile = await response.json();
+      setProfile(data);
+      setDraft(data);
+    } catch (err) {
+      setError("Could not load profile from backend.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadProfile();
+}, []);
 
   const startEdit = () => {
     setDraft({ ...profile });
     setEditing(true);
   };
-  const saveEdit = () => {
-    setProfile({ ...draft });
+  const saveEdit = async () => {
+  try {
+    const response = await fetch("/api/profile", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(draft),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to save profile");
+    }
+
+    const updatedProfile: Profile = await response.json();
+    setProfile(updatedProfile);
+    setDraft(updatedProfile);
     setEditing(false);
-  };
+  } catch (err) {
+    setError("Could not save profile changes.");
+  }
+};
   const cancelEdit = () => setEditing(false);
 
   const addSkill = () => {
@@ -166,8 +207,25 @@ export default function Profile() {
     { label: "LinkedIn", key: "linkedin", type: "text" },
   ];
 
+  
+    if (loading) {
   return (
-    <div className="min-h-screen bg-[#0f0e1a] text-white pb-20">
+    <div className="min-h-screen bg-[#0f0e1a] text-white flex items-center justify-center">
+      Loading profile...
+    </div>
+  );
+}
+
+if (error) {
+  return (
+    <div className="min-h-screen bg-[#0f0e1a] text-white flex items-center justify-center">
+      {error}
+    </div>
+  );
+}
+
+return (
+  <div className="min-h-screen bg-[#0f0e1a] text-white pb-20">
 
       {/* ── Banner ── */}
       <div className="relative h-52 overflow-hidden group">
