@@ -9,6 +9,7 @@ frontend/.env.production
 # =========================
 # Backend
 # =========================
+.venv/
 backend/.venv/
 backend/__pycache__/
 backend/**/*.pyc
