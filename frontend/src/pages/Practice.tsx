@@ -1,439 +1,468 @@
-import { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
-  Lock,
-  Play,
-  Crown,
-  Zap,
-  Coins,
-  X,
-  ChevronLeft,
-  Sparkles,
-  Award,
-  Clock,
-  Flame,
+  Search,
   CheckCircle2,
+  CircleDot,
+  Flame,
+  Building2,
+  Filter,
+  Sun,
+  Moon,
+  Code2,
+  Layers,
+  ChevronRight,
+  RotateCcw,
 } from "lucide-react";
+import {
+  PROBLEMS,
+  Problem,
+  Difficulty,
+  Category,
+  ProblemStatus,
+  COMPANIES_LIST,
+} from "@/data/problems";
+import { PracticeWorkspace } from "@/components/practice/PracticeWorkspace";
+import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 
-/* ── Kingdom + mission definitions ────────────────────────── */
-const KINGDOMS = [
-  {
-    id: "dsa",
-    emoji: "🏰",
-    name: "DSA Kingdom",
-    mission: "Conquer Arrays & Recursion",
-    from: "from-purple-600",
-    to: "to-violet-600",
-    glow: "rgba(139,92,246,0.5)",
-    missions: ["Arrays Explorer", "Strings Warrior", "Stack Defender", "Queue Runner", "Trees Guardian", "Graph Adventurer", "Arrays Conqueror"],
-  },
-  {
-    id: "sql",
-    emoji: "🏙",
-    name: "SQL City",
-    mission: "Master Joins & Queries",
-    from: "from-blue-600",
-    to: "to-cyan-600",
-    glow: "rgba(59,130,246,0.5)",
-    missions: ["SQL Basics", "SELECT Commander", "WHERE Hunter", "JOIN Architect", "Aggregation Master", "Window Wizard", "Database Champion"],
-  },
-  {
-    id: "java",
-    emoji: "🌋",
-    name: "Java Valley",
-    mission: "Forge OOP Mastery",
-    from: "from-orange-600",
-    to: "to-red-600",
-    glow: "rgba(249,115,22,0.5)",
-    missions: ["Java Basics", "OOP Explorer", "Collections Master", "Exception Guardian", "Multithreading Warrior", "Spring Starter", "Java Champion"],
-  },
-  {
-    id: "web",
-    emoji: "🌐",
-    name: "WebVerse",
-    mission: "Build the Modern Web",
-    from: "from-teal-600",
-    to: "to-emerald-600",
-    glow: "rgba(20,184,166,0.5)",
-    missions: ["HTML Voyager", "CSS Stylist", "JS Pathfinder", "React Builder", "API Connector", "Performance Tuner", "Web Champion"],
-  },
-  {
-    id: "apt",
-    emoji: "🧠",
-    name: "Aptitude Peak",
-    mission: "Sharpen Logic & Speed",
-    from: "from-amber-500",
-    to: "to-yellow-600",
-    glow: "rgba(245,158,11,0.5)",
-    missions: ["Number Climber", "Logic Scout", "Puzzle Hunter", "Probability Ranger", "Time & Work Master", "Data Interpreter", "Aptitude Champion"],
-  },
-  {
-    id: "hr",
-    emoji: "🎤",
-    name: "HR Realm",
-    mission: "Speak with Confidence",
-    from: "from-pink-600",
-    to: "to-rose-600",
-    glow: "rgba(236,72,153,0.5)",
-    missions: ["Intro Builder", "Strength Storyteller", "Behavioral Speaker", "Salary Negotiator", "Mock Interviewer", "Body Language Pro", "HR Champion"],
-  },
+type CategoryFilter = "All" | "DSA" | "SQL" | "Core CS" | "Frequently Asked" | "Weak Areas";
+
+const TOPIC_LIST = [
+  "All",
+  "Arrays",
+  "Strings",
+  "Hashing",
+  "Two Pointers",
+  "Sliding Window",
+  "Stack",
+  "Queue",
+  "Linked List",
+  "Binary Search",
+  "Trees",
+  "Graphs",
+  "Dynamic Programming",
+  "Greedy",
+  "Backtracking",
+  "Math",
+  "SQL",
+  "DBMS",
+  "Operating Systems",
+  "Computer Networks",
+  "OOP",
 ];
 
-const MISSIONS_PER_KINGDOM = 7; // 6 missions + 1 boss
-
-function missionMeta(n: number) {
-  const isBoss = n === MISSIONS_PER_KINGDOM;
-  const difficulty = n <= 2 ? "Easy" : n <= 4 ? "Medium" : "Hard";
-  return {
-    isBoss,
-    difficulty: isBoss ? "Boss" : difficulty,
-    time: isBoss ? "30 min" : `${10 + n * 3} min`,
-    xp: isBoss ? 500 : 60 + n * 20,
-    coins: isBoss ? 100 : 10 + n * 5,
-  };
-}
-
 export default function Practice() {
-  const [progress, setProgress] = useState<Record<string, number>>(
-    Object.fromEntries(KINGDOMS.map((k) => [k.id, 0]))
-  );
-  const [activeKingdom, setActiveKingdom] = useState<string | null>(null);
-  const [streak, setStreak] = useState(4);
-  const [celebration, setCelebration] = useState<{ kingdomId: string; level: number } | null>(null);
+  const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
-  function playMission(kingdomId: string, level: number) {
-    setCelebration({ kingdomId, level });
-  }
+  // Active Workspace Problem
+  const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
 
-  function closeCelebration() {
-    if (!celebration) return;
-    setProgress((p) => ({
-      ...p,
-      [celebration.kingdomId]: Math.max(p[celebration.kingdomId], celebration.level),
+  // User Problem Status & Mastery Store
+  const [problemStates, setProblemStates] = useState<
+    Record<string, { status: ProblemStatus; mastery: number }>
+  >(() => {
+    return {
+      "pm-arr-001": { status: "Solved", mastery: 85 },
+      "pm-arr-002": { status: "Solved", mastery: 90 },
+      "pm-arr-003": { status: "Solved", mastery: 75 },
+      "pm-arr-004": { status: "Attempted", mastery: 45 },
+      "pm-arr-005": { status: "Solved", mastery: 80 },
+      "pm-dsa-011": { status: "Solved", mastery: 95 },
+      "pm-dsa-016": { status: "Attempted", mastery: 50 },
+      "pm-dsa-021": { status: "Solved", mastery: 80 },
+      "pm-dsa-029": { status: "Attempted", mastery: 40 },
+    };
+  });
+
+  // Filter States
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All");
+  const [selectedTopic, setSelectedTopic] = useState<string>("All");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("All");
+  const [selectedCompany, setSelectedCompany] = useState<string>("All");
+  const [selectedStatus, setSelectedStatus] = useState<string>("All");
+
+  // Dynamically compute counts for each topic from the actual dataset
+  const topicCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: PROBLEMS.length };
+    for (const p of PROBLEMS) {
+      for (const t of p.topics) {
+        counts[t] = (counts[t] || 0) + 1;
+      }
+      if (p.category === "SQL") {
+        counts["SQL"] = (counts["SQL"] || 0) + 1;
+      }
+      if (p.category === "Core CS") {
+        counts["Core CS"] = (counts["Core CS"] || 0) + 1;
+      }
+    }
+    return counts;
+  }, []);
+
+  // Selected Problem
+  const selectedProblem = useMemo(() => {
+    return PROBLEMS.find((p) => p.id === selectedProblemId) || null;
+  }, [selectedProblemId]);
+
+  // Update Problem Status & Mastery
+  const handleProblemStatusChange = (newStatus: "Attempted" | "Solved", newMastery: number) => {
+    if (!selectedProblemId) return;
+    setProblemStates((prev) => ({
+      ...prev,
+      [selectedProblemId]: {
+        status: newStatus,
+        mastery: newMastery,
+      },
     }));
-    setStreak((s) => s + 1);
-    setCelebration(null);
-  }
+  };
 
-  const kingdom = KINGDOMS.find((k) => k.id === activeKingdom) ?? null;
+  // Filtered Problems List
+  const filteredProblems = useMemo(() => {
+    return PROBLEMS.filter((p) => {
+      // 1. Category Pill Filter
+      if (categoryFilter === "DSA" && p.category !== "DSA") return false;
+      if (categoryFilter === "SQL" && p.category !== "SQL") return false;
+      if (categoryFilter === "Core CS" && p.category !== "Core CS") return false;
+      if (categoryFilter === "Frequently Asked" && !p.frequentlyAsked) return false;
+      if (categoryFilter === "Weak Areas") {
+        const state = problemStates[p.id];
+        if (!state || state.status !== "Attempted") return false;
+      }
 
-  /* ─────────────────────────────────────────────────────────
-     Kingdom details — mission path
-     ───────────────────────────────────────────────────────── */
-  if (kingdom) {
-    const cleared = progress[kingdom.id];
+      // 2. Horizontal Topic Bar Filter
+      if (selectedTopic !== "All") {
+        const matchesTopic = p.topics.some(
+          (t) => t.toLowerCase() === selectedTopic.toLowerCase()
+        );
+        const matchesCategory =
+          (selectedTopic === "SQL" && p.category === "SQL") ||
+          (selectedTopic === "DBMS" && p.topics.includes("DBMS")) ||
+          (selectedTopic === "Operating Systems" && p.topics.includes("Operating Systems")) ||
+          (selectedTopic === "Computer Networks" && p.topics.includes("Computer Networks")) ||
+          (selectedTopic === "OOP" && p.topics.includes("OOP"));
+
+        if (!matchesTopic && !matchesCategory) return false;
+      }
+
+      // 3. Search Query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesTitle = p.title.toLowerCase().includes(query);
+        const matchesTopic = p.topics.some((t) => t.toLowerCase().includes(query));
+        const matchesCompany = p.companies?.some((c) => c.toLowerCase().includes(query));
+        if (!matchesTitle && !matchesTopic && !matchesCompany) return false;
+      }
+
+      // 4. Difficulty
+      if (selectedDifficulty !== "All" && p.difficulty !== selectedDifficulty) return false;
+
+      // 5. Company
+      if (selectedCompany !== "All" && (!p.companies || !p.companies.includes(selectedCompany)))
+        return false;
+
+      // 6. Status
+      if (selectedStatus !== "All") {
+        const currentStatus = problemStates[p.id]?.status || "Not Started";
+        if (currentStatus !== selectedStatus) return false;
+      }
+
+      return true;
+    });
+  }, [
+    categoryFilter,
+    selectedTopic,
+    searchQuery,
+    selectedDifficulty,
+    selectedCompany,
+    selectedStatus,
+    problemStates,
+  ]);
+
+  // If a problem is clicked, open the 100vw x 100vh Full-Screen IDE workspace
+  if (selectedProblem) {
+    const currentStatus = problemStates[selectedProblem.id]?.status || "Not Started";
+    const currentMastery =
+      problemStates[selectedProblem.id]?.mastery || selectedProblem.defaultMastery || 0;
+
     return (
-      <div className="space-y-8">
-        <div className="flex items-center gap-4 w-[90%] mx-auto">
-          <button
-            onClick={() => setActiveKingdom(null)}
-            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${kingdom.from} ${kingdom.to} flex items-center justify-center text-2xl shrink-0 shadow-lg`}>
-            {kingdom.emoji}
-          </div>
-          <div>
-            <h1 className="text-2xl font-display font-bold text-white tracking-tight">{kingdom.name}</h1>
-            <p className="text-sm text-muted-foreground">{kingdom.mission}</p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-5 w-[90%] mx-auto">
-          {Array.from({ length: MISSIONS_PER_KINGDOM }, (_, i) => i + 1).map((n) => {
-            const { isBoss, difficulty, time, xp, coins } = missionMeta(n);
-            const name = kingdom.missions[n - 1];
-            const unlocked = n <= cleared + 1;
-            const done = n <= cleared;
-
-            return (
-              <div
-                key={n}
-                className={`relative rounded-3xl border flex items-center justify-between gap-6 transition-all duration-300 overflow-hidden ${
-                  isBoss ? "p-8 md:p-10 min-h-[170px]" : "p-6 md:p-8 min-h-[140px]"
-                } ${
-                  unlocked
-                    ? isBoss
-                      ? "border-amber-400/50 bg-white/5 backdrop-blur-xl shadow-[0_0_50px_-12px_rgba(245,158,11,0.45)]"
-                      : "border-white/10 bg-white/5 backdrop-blur-xl hover:border-white/20"
-                    : "border-white/5 bg-white/[0.03] backdrop-blur-md opacity-60"
-                }`}
-              >
-                {isBoss && (
-                  <div
-                    className="pointer-events-none absolute inset-0 opacity-70"
-                    style={{ background: "radial-gradient(70% 70% at 100% 0%, rgba(245,158,11,0.18), transparent 70%)" }}
-                  />
-                )}
-
-                <div className="relative flex items-center gap-5 md:gap-6 min-w-0">
-                  <div
-                    className={`flex items-center justify-center shrink-0 rounded-2xl ${
-                      isBoss ? "w-16 h-16 md:w-20 md:h-20" : "w-14 h-14"
-                    } ${
-                      done
-                        ? `bg-gradient-to-br ${kingdom.from} ${kingdom.to} text-white`
-                        : unlocked
-                        ? isBoss
-                          ? "bg-gradient-to-br from-amber-500 to-yellow-600 text-white"
-                          : "bg-white/10 text-white"
-                        : "bg-white/5 text-muted-foreground"
-                    }`}
-                  >
-                    {done ? (
-                      <CheckCircle2 className={isBoss ? "w-8 h-8" : "w-6 h-6"} />
-                    ) : unlocked ? (
-                      isBoss ? <Crown className="w-7 h-7 md:w-9 md:h-9" /> : <span className="text-base font-bold">{n}</span>
-                    ) : (
-                      <Lock className="w-4 h-4" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className={`font-semibold truncate ${isBoss ? "text-xl md:text-2xl" : "text-base"} ${unlocked ? "text-white" : "text-white/60"}`}>
-                        {isBoss ? `👑 ${name}` : name}
-                      </h3>
-                      {isBoss && (
-                        <span className="text-[10px] font-semibold px-2.5 py-1 rounded-md border text-amber-300 border-amber-400/40 bg-amber-400/15 shrink-0">
-                          BOSS
-                        </span>
-                      )}
-                      {done && (
-                        <span className="text-[10px] font-semibold px-2.5 py-1 rounded-md border text-success border-success/30 bg-success/10 shrink-0">
-                          ✅ Completed
-                        </span>
-                      )}
-                    </div>
-
-                    <p className={`mt-1.5 text-xs ${unlocked ? "text-muted-foreground" : "text-muted-foreground/70"} max-w-md truncate`}>
-                      {unlocked ? `${difficulty} mission · ${kingdom.name}` : "Complete previous mission to unlock"}
-                    </p>
-
-                    <div className="flex items-center gap-2 mt-3 flex-wrap">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${
-                        difficulty === "Easy" ? "text-success border-success/20 bg-success/10" :
-                        difficulty === "Medium" ? "text-orange-400 border-orange-400/20 bg-orange-400/10" :
-                        difficulty === "Boss" ? "text-amber-300 border-amber-400/30 bg-amber-400/10" :
-                        "text-red-400 border-red-400/20 bg-red-400/10"
-                      }`}>
-                        {difficulty}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-white/5 px-2.5 py-0.5 rounded-md">
-                        <Clock className="w-3 h-3" /> {time}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-white/5 px-2.5 py-0.5 rounded-md">
-                        <Zap className="w-3 h-3 text-purple-300" /> {xp} XP
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground bg-white/5 px-2.5 py-0.5 rounded-md">
-                        <Coins className="w-3 h-3 text-amber-300" /> {coins} Coins
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  disabled={!unlocked}
-                  onClick={() => playMission(kingdom.id, n)}
-                  className={`relative flex items-center justify-center shrink-0 rounded-2xl transition-all duration-200 ${
-                    isBoss ? "w-16 h-16 md:w-20 md:h-20" : "w-12 h-12"
-                  } ${
-                    unlocked
-                      ? isBoss
-                        ? "bg-gradient-to-br from-amber-500 to-yellow-600 text-white shadow-[0_0_30px_-6px_rgba(245,158,11,0.7)] hover:scale-105"
-                        : `bg-gradient-to-br ${kingdom.from} ${kingdom.to} text-white shadow-md hover:scale-105`
-                      : "bg-white/5 text-muted-foreground cursor-not-allowed"
-                  }`}
-                >
-                  {unlocked ? <Play className={isBoss ? "w-7 h-7 ml-0.5" : "w-5 h-5 ml-0.5"} /> : <Lock className="w-5 h-5" />}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        {celebration && celebration.kingdomId === kingdom.id && (
-          <CelebrationModal
-            name={kingdom.missions[celebration.level - 1]}
-            meta={missionMeta(celebration.level)}
-            streak={streak + 1}
-            hasNext={celebration.level < MISSIONS_PER_KINGDOM}
-            nextName={celebration.level < MISSIONS_PER_KINGDOM ? kingdom.missions[celebration.level] : undefined}
-            onContinue={closeCelebration}
-          />
-        )}
-      </div>
+      <PracticeWorkspace
+        problem={selectedProblem}
+        onBack={() => setSelectedProblemId(null)}
+        userStatus={currentStatus}
+        masteryPercentage={currentMastery}
+        onStatusChange={handleProblemStatusChange}
+      />
     );
   }
 
-  /* ─────────────────────────────────────────────────────────
-     Map view — all kingdoms always accessible
-     ───────────────────────────────────────────────────────── */
-  const totalCleared = KINGDOMS.reduce((sum, k) => sum + progress[k.id], 0);
-  const totalMissions = KINGDOMS.length * MISSIONS_PER_KINGDOM;
-
   return (
-    <div className="space-y-12">
-      <div className="text-center space-y-3">
-        <h1 className="text-4xl md:text-5xl font-display font-bold text-white tracking-tight">Interview Arena</h1>
-        <p className="text-lg text-muted-foreground">Complete missions. Unlock kingdoms. Master placements.</p>
-      </div>
-
-      <div className="relative w-[88%] max-w-7xl mx-auto">
-        {/* glowing connecting path */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-[3px] -translate-x-1/2 bg-white/5 rounded-full overflow-hidden">
-          <div
-            className="w-full rounded-full bg-gradient-to-b from-purple-500 via-blue-500 to-purple-500 transition-all duration-700"
-            style={{
-              height: `${Math.max((totalCleared / totalMissions) * 100, 6)}%`,
-              boxShadow: "0 0 16px 2px rgba(139,92,246,0.6)",
-            }}
-          />
+    <div className="space-y-4 text-foreground font-sans max-w-6xl mx-auto pb-12 animate-fade-in">
+      {/* ── 1. Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b border-border">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-sans">
+            Practice
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Practice questions companies actually ask.
+          </p>
         </div>
 
-        <div className="relative flex flex-col gap-8">
-          {KINGDOMS.map((k) => {
-            const cleared = progress[k.id];
-            const pct = Math.round((cleared / MISSIONS_PER_KINGDOM) * 100);
-
-            return (
-              <div key={k.id} className="relative flex items-center gap-5">
-                <div
-                  className="absolute left-1/2 -translate-x-1/2 -top-2 w-4 h-4 rounded-full border-2 bg-purple-400 border-purple-300 z-10"
-                  style={{ boxShadow: "0 0 14px 3px rgba(139,92,246,0.7)" }}
-                />
-
-                <div className="relative w-full rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-8 md:p-10 overflow-hidden transition-all duration-500 hover:border-white/20">
-                  <div
-                    className="pointer-events-none absolute inset-0 opacity-50"
-                    style={{ background: `radial-gradient(55% 55% at 15% 0%, ${k.glow}, transparent 70%)` }}
-                  />
-
-                  <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-6 min-w-0 flex-1">
-                      <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl shrink-0 shadow-lg bg-gradient-to-br ${k.from} ${k.to}`}>
-                        {k.emoji}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-xl font-semibold text-white truncate">{k.name}</h3>
-                        <p className="text-sm text-muted-foreground mb-4 truncate">{k.mission}</p>
-
-                        <div className="h-1.5 w-full max-w-md rounded-full bg-white/[0.07] mb-4">
-                          <div
-                            className={`h-full rounded-full bg-gradient-to-r ${k.from} ${k.to} transition-all duration-500`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-white/5 px-2.5 py-1 rounded-md">
-                            <Zap className="w-3.5 h-3.5 text-purple-300" /> {missionMeta(1).xp} XP
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-white/5 px-2.5 py-1 rounded-md">
-                            <Coins className="w-3.5 h-3.5 text-amber-300" /> {missionMeta(1).coins} Coins
-                          </span>
-                          <span className="text-xs text-muted-foreground bg-white/5 px-2.5 py-1 rounded-md">
-                            ✅ {cleared}/{MISSIONS_PER_KINGDOM} Cleared
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex md:flex-col items-center md:items-end justify-end gap-3 shrink-0 md:pl-6">
-                      <button
-                        onClick={() => setActiveKingdom(k.id)}
-                        className={`shrink-0 rounded-xl bg-gradient-to-r ${k.from} ${k.to} px-7 py-3.5 text-sm font-semibold text-white shadow-md hover:scale-[1.03] active:scale-[0.98] transition-all duration-200`}
-                      >
-                        Enter Kingdom
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Mission complete celebration ─────────────────────────── */
-function CelebrationModal({
-  name,
-  meta,
-  streak,
-  hasNext,
-  nextName,
-  onContinue,
-}: {
-  name: string;
-  meta: ReturnType<typeof missionMeta>;
-  streak: number;
-  hasNext: boolean;
-  nextName?: string;
-  onContinue: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-6">
-      <div className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-[#0b0d14]/95 backdrop-blur-2xl p-8 text-center overflow-hidden shadow-[0_25px_100px_rgba(0,0,0,0.75)]">
-        <div
-          className="pointer-events-none absolute -inset-10 opacity-70 blur-3xl"
-          style={{
-            background:
-              "radial-gradient(50% 50% at 25% 10%, rgba(168,85,247,0.45), transparent 70%), radial-gradient(50% 50% at 85% 90%, rgba(245,158,11,0.3), transparent 70%)",
-          }}
-        />
-        <button
-          onClick={onContinue}
-          className="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        <div className="relative flex flex-col items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-amber-400 flex items-center justify-center shadow-lg animate-pulse">
-            {meta.isBoss ? <Crown className="w-8 h-8 text-white" /> : <Sparkles className="w-8 h-8 text-white" />}
+        {/* Search & Theme Toggle */}
+        <div className="flex items-center gap-2.5">
+          <div className="relative w-72">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search questions, topics, companies..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md bg-card border border-border text-foreground placeholder:text-muted-foreground outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-sans"
+            />
           </div>
-
-          <div>
-            <p className="text-xl font-bold text-white mb-1">✨ Mission Complete</p>
-            <p className="text-xs text-muted-foreground">{name}</p>
-          </div>
-
-          {meta.isBoss && (
-            <div className="w-full flex items-center justify-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3">
-              <Award className="w-4 h-4 text-amber-300" />
-              <span className="text-xs font-semibold text-amber-300">🏅 Badge Unlocked</span>
-            </div>
-          )}
-
-          <div className="w-full grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] py-3.5">
-              <p className="text-lg font-bold text-purple-300">+{meta.xp} XP</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Earned</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] py-3.5">
-              <p className="text-lg font-bold text-amber-300">+{meta.coins} Coins</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Earned</p>
-            </div>
-          </div>
-
-          <div className="w-full flex items-center justify-between rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
-            <span className="inline-flex items-center gap-1.5 text-xs text-orange-300 font-medium">
-              <Flame className="w-3.5 h-3.5" /> Streak maintained
-            </span>
-            <span className="text-xs font-bold text-white">{streak} days</span>
-          </div>
-
-          {hasNext && <p className="text-xs text-muted-foreground">🔓 {nextName} unlocked</p>}
 
           <button
-            onClick={onContinue}
-            className="w-full rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_0_24px_-6px_rgba(139,92,246,0.6)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Light Mode" : "Dark Mode"}
+            className="p-1.5 rounded-md border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           >
-            Continue
+            {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
           </button>
+        </div>
+      </div>
+
+      {/* ── 2. Category Filter Pills ── */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 select-none">
+        {(
+          [
+            { id: "All", label: "All Topics" },
+            { id: "DSA", label: "Algorithms & DSA" },
+            { id: "SQL", label: "Database & SQL" },
+            { id: "Core CS", label: "Core CS" },
+            { id: "Frequently Asked", label: "Frequently Asked" },
+            { id: "Weak Areas", label: "Weak Areas" },
+          ] as { id: CategoryFilter; label: string }[]
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setCategoryFilter(tab.id);
+              setSelectedTopic("All");
+            }}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all ${
+              categoryFilter === tab.id
+                ? "bg-teal-600 text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground bg-card hover:bg-secondary border border-border"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 3. Horizontal Topic Navigation with Dynamic Question Counts ── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none select-none">
+        {TOPIC_LIST.map((topic) => {
+          const count = topicCounts[topic] || 0;
+          const isSelected = selectedTopic === topic;
+          return (
+            <button
+              key={topic}
+              onClick={() => setSelectedTopic(topic)}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                isSelected
+                  ? "bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/40 font-semibold"
+                  : "bg-card text-muted-foreground hover:text-foreground hover:bg-secondary border border-border"
+              }`}
+            >
+              <span>{topic}</span>
+              <span
+                className={`text-[11px] font-mono px-1.5 py-0.2 rounded ${
+                  isSelected
+                    ? "bg-teal-500/20 text-teal-700 dark:text-teal-300 font-bold"
+                    : "bg-secondary text-muted-foreground"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── 4. Compact Multi-Filter Toolbar ── */}
+      <div className="p-2.5 rounded-lg bg-card border border-border flex flex-wrap items-center gap-3 text-xs">
+        {/* Difficulty */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground font-medium">Difficulty:</span>
+          <select
+            value={selectedDifficulty}
+            onChange={(e) => setSelectedDifficulty(e.target.value)}
+            className="bg-secondary text-foreground border border-border rounded-md px-2 py-1 outline-none font-medium cursor-pointer"
+          >
+            <option value="All">All Difficulties</option>
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+        </div>
+
+        {/* Company Filter */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground font-medium">Company:</span>
+          <select
+            value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="bg-secondary text-foreground border border-border rounded-md px-2 py-1 outline-none font-medium cursor-pointer"
+          >
+            <option value="All">All Companies</option>
+            {COMPANIES_LIST.map((comp) => (
+              <option key={comp} value={comp}>
+                {comp}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Status Filter */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground font-medium">Status:</span>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="bg-secondary text-foreground border border-border rounded-md px-2 py-1 outline-none font-medium cursor-pointer"
+          >
+            <option value="All">All Statuses</option>
+            <option value="Solved">Solved</option>
+            <option value="Attempted">Attempted</option>
+            <option value="Not Started">Todo</option>
+          </select>
+        </div>
+
+        {/* Results Counter */}
+        <span className="text-xs text-muted-foreground font-mono ml-auto">
+          Showing {filteredProblems.length} questions
+        </span>
+
+        {/* Clear Filters */}
+        {(selectedDifficulty !== "All" ||
+          selectedCompany !== "All" ||
+          selectedStatus !== "All" ||
+          selectedTopic !== "All" ||
+          categoryFilter !== "All" ||
+          searchQuery.trim() !== "") && (
+          <button
+            onClick={() => {
+              setSelectedDifficulty("All");
+              setSelectedCompany("All");
+              setSelectedStatus("All");
+              setSelectedTopic("All");
+              setCategoryFilter("All");
+              setSearchQuery("");
+            }}
+            className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-medium"
+          >
+            Reset Filters
+          </button>
+        )}
+      </div>
+
+      {/* ── 5. Dense Professional Problem Table ── */}
+      <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
+        {/* Table Header Row */}
+        <div className="grid grid-cols-12 px-4 py-2 border-b border-border bg-secondary/50 text-[11px] font-bold text-muted-foreground uppercase tracking-wider select-none">
+          <div className="col-span-1 text-center">Status</div>
+          <div className="col-span-6 sm:col-span-5">Title & Topics</div>
+          <div className="col-span-2 text-center sm:text-left">Difficulty</div>
+          <div className="hidden sm:block sm:col-span-3">Companies</div>
+          <div className="col-span-3 sm:col-span-1 text-right">Mastery</div>
+        </div>
+
+        {/* Dense Problem Rows */}
+        <div className="divide-y divide-border/60">
+          {filteredProblems.length === 0 ? (
+            <div className="p-12 text-center text-muted-foreground space-y-2">
+              <Code2 className="w-8 h-8 mx-auto text-muted-foreground/60" />
+              <p className="text-sm font-semibold text-foreground">No matching problems found</p>
+              <p className="text-xs">Try selecting another topic or clearing filters.</p>
+            </div>
+          ) : (
+            filteredProblems.map((prob, idx) => {
+              const state = problemStates[prob.id] || {
+                status: "Not Started",
+                mastery: prob.defaultMastery || 0,
+              };
+              const isSolved = state.status === "Solved";
+              const isAttempted = state.status === "Attempted";
+
+              const diffColor =
+                prob.difficulty === "Easy"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : prob.difficulty === "Medium"
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-rose-600 dark:text-rose-400";
+
+              return (
+                <div
+                  key={prob.id}
+                  onClick={() => setSelectedProblemId(prob.id)}
+                  className={`grid grid-cols-12 px-4 py-2.5 items-center hover:bg-secondary/60 cursor-pointer transition-colors text-sm group ${
+                    idx % 2 === 0 ? "bg-transparent" : "bg-secondary/20"
+                  }`}
+                >
+                  {/* Status Indicator */}
+                  <div className="col-span-1 flex justify-center">
+                    {isSolved ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    ) : isAttempted ? (
+                      <CircleDot className="w-4 h-4 text-amber-500" />
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-border" />
+                    )}
+                  </div>
+
+                  {/* Title & Topic Badges */}
+                  <div className="col-span-6 sm:col-span-5 pr-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-foreground group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors text-sm">
+                        {idx + 1}. {prob.title}
+                      </span>
+                      {prob.frequentlyAsked && (
+                        <Flame className="w-3.5 h-3.5 text-teal-500 fill-teal-500/20 flex-shrink-0" />
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {prob.topics.join(" · ")}
+                    </div>
+                  </div>
+
+                  {/* Difficulty */}
+                  <div className="col-span-2 text-center sm:text-left">
+                    <span className={`text-xs font-bold ${diffColor}`}>
+                      {prob.difficulty}
+                    </span>
+                  </div>
+
+                  {/* Companies */}
+                  <div className="hidden sm:block sm:col-span-3 text-xs text-muted-foreground truncate">
+                    {prob.companies && prob.companies.length > 0 ? (
+                      prob.companies.join(" · ")
+                    ) : (
+                      <span className="text-muted-foreground/40">—</span>
+                    )}
+                  </div>
+
+                  {/* Mastery % */}
+                  <div className="col-span-3 sm:col-span-1 text-right">
+                    <span className="text-xs font-mono font-bold text-foreground">
+                      {state.mastery}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

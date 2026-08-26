@@ -467,8 +467,10 @@ function ProgressRing({
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          className="transition-[stroke-dashoffset] duration-[1200ms] ease-out"
+          className="transition-[stroke-dashoffset] ease-out"
+          style={{ transitionDuration: "1200ms" }}
         />
+
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {label && <span className="text-2xl font-bold text-white tabular-nums">{label}</span>}

@@ -1,8 +1,10 @@
 from fastapi import FastAPI, APIRouter
-from routes.profile import router as profile_router
 from app.api.auth import router as auth_router
+from app.api.users import router as users_router
+from routes.profile import router as profile_router
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -16,13 +18,20 @@ from datetime import datetime, timezone
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Ensure uploads directory exists
+UPLOAD_DIR = ROOT_DIR / "uploads"
+(UPLOAD_DIR / "avatars").mkdir(parents=True, exist_ok=True)
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(title="PlaceMentor AI Backend")
+
+# Mount uploads for serving static assets like avatars
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -42,7 +51,7 @@ class StatusCheckCreate(BaseModel):
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "PlaceMentor AI API Running 🚀"}
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -68,10 +77,14 @@ async def get_status_checks():
     
     return status_checks
 
-# Include the router in the main app
+# Include feature routers in the /api router
+api_router.include_router(auth_router)
+api_router.include_router(users_router)
 api_router.include_router(profile_router)
+
+# Mount the api router to the main app
 app.include_router(api_router)
-app.include_router(auth_router)
+
 
 
 app.add_middleware(
