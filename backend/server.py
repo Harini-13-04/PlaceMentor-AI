@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
+from app.api.resume import router as resume_router
 from routes.profile import router as profile_router
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -80,6 +81,7 @@ async def get_status_checks():
 # Include feature routers in the /api router
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
+api_router.include_router(resume_router)
 api_router.include_router(profile_router)
 
 # Mount the api router to the main app
