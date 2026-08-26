@@ -1,0 +1,193 @@
+/* ============================================================================
+   PlaceMentor AI — Global Design System Tokens
+   Source of Truth for Colors, Typography, Spacing, Radius, and Components
+============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root, .dark {
+  /* Dark Mode Palette — Professional IDE Slate */
+  --bg-primary: #121417;
+  --bg-secondary: #181b20;
+  --surface: #1e2229;
+  --surface-hover: #262b34;
+  --surface-active: #2f3642;
+  --border-subtle: #252b34;
+  --border: #2e3540;
+  --border-default: #3b4452;
+
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+
+  --accent: #14b8a6;
+  --accent-hover: #0d9488;
+  --accent-subtle: rgba(20, 184, 166, 0.12);
+  --accent-border: rgba(20, 184, 166, 0.35);
+
+  /* Semantics */
+  --success: #10b981;
+  --success-subtle: rgba(16, 185, 129, 0.12);
+  --warning: #f59e0b;
+  --warning-subtle: rgba(245, 158, 11, 0.12);
+  --error: #ef4444;
+  --error-subtle: rgba(239, 68, 68, 0.12);
+  --info: #3b82f6;
+
+  /* Tailwind Bridge Tokens (HSL) */
+  --background: 215 12% 8%;
+  --foreground: 210 20% 96%;
+  --card: 218 15% 12%;
+  --card-foreground: 210 20% 96%;
+  --popover: 218 15% 12%;
+  --popover-foreground: 210 20% 96%;
+  --primary: 173 80% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 218 14% 16%;
+  --secondary-foreground: 210 20% 96%;
+  --muted: 218 14% 16%;
+  --muted-foreground: 218 10% 55%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 173 80% 40%;
+  --radius: 0.5rem;
+
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+.light {
+  /* Light Mode Palette — Professional Clean Technical Slate */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --surface: #ffffff;
+  --surface-hover: #f8fafc;
+  --surface-active: #f1f5f9;
+  --border-subtle: #e2e8f0;
+  --border: #cbd5e1;
+  --border-default: #94a3b8;
+
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-subtle: rgba(13, 148, 136, 0.08);
+  --accent-border: rgba(13, 148, 136, 0.3);
+
+  /* Semantics */
+  --success: #059669;
+  --success-subtle: rgba(5, 150, 105, 0.1);
+  --warning: #d97706;
+  --warning-subtle: rgba(217, 119, 6, 0.1);
+  --error: #dc2626;
+  --error-subtle: rgba(220, 38, 38, 0.1);
+  --info: #2563eb;
+
+  /* Tailwind Bridge Tokens (HSL) */
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --primary: 175 77% 26%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215 16% 47%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --ring: 175 77% 26%;
+}
+
+/* ============================================================================
+   Global Component Standard Classes
+============================================================================ */
+
+/* Buttons */
+.pm-btn-primary {
+  @apply inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
+  background-color: var(--accent);
+  color: #ffffff;
+}
+.pm-btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.pm-btn-secondary {
+  @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.pm-btn-secondary:hover {
+  background-color: var(--surface-hover);
+}
+
+.pm-btn-ghost {
+  @apply inline-flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150 text-muted-foreground hover:text-foreground;
+}
+.pm-btn-ghost:hover {
+  background-color: var(--surface-hover);
+}
+
+/* Cards */
+.pm-card {
+  @apply rounded-lg border transition-all duration-150;
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.pm-card-hover:hover {
+  background-color: var(--surface-hover);
+  border-color: var(--border-default);
+}
+
+/* Form Inputs */
+.pm-input {
+  @apply w-full px-3 py-1.5 text-xs rounded-md border outline-none transition-all duration-150;
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.pm-input::placeholder {
+  color: var(--text-muted);
+}
+.pm-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.pm-select {
+  @apply px-2.5 py-1.5 text-xs rounded-md border outline-none transition-all duration-150 cursor-pointer font-medium;
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.pm-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Typography scale utilities */
+.pm-h1 {
+  @apply text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-sans;
+}
+.pm-h2 {
+  @apply text-xl font-bold tracking-tight text-foreground font-sans;
+}
+.pm-h3 {
+  @apply text-base font-semibold text-foreground font-sans;
+}
+.pm-body {
+  @apply text-sm sm:text-base text-foreground font-sans leading-relaxed;
+}
+.pm-sub {
+  @apply text-xs sm:text-sm text-muted-foreground font-sans;
+}
+.pm-caption {
+  @apply text-xs text-muted-foreground font-sans;
+}

@@ -31,4 +31,21 @@ __pycache__/
 # OS Files
 # =========================
 .DS_Store
-Thumbs.db
+Thumbs.db# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Environment
+.env
+.env.*
+
+# Node
+node_modules/
+dist/
+
+# Generated uploads
+backend/uploads/
+
+# Local backup archives
+*.zip

@@ -447,6 +447,13 @@ interface ProgressRingProps {
   animate?: boolean;
 }
 
+const RING_GRADIENTS: Record<AccentColor, { start: string; end: string }> = {
+  purple: { start: "#c084fc", end: "#9333ea" },
+  cyan: { start: "#22d3ee", end: "#0891b2" },
+  emerald: { start: "#34d399", end: "#059669" },
+  orange: { start: "#fb923c", end: "#ea580c" },
+};
+
 function ProgressRing({
   percentage,
   size = 140,
@@ -471,14 +478,15 @@ function ProgressRing({
   }, [percentage, animate]);
 
   const offset = circumference - (displayPct / 100) * circumference;
+  const colors = RING_GRADIENTS[accent] || RING_GRADIENTS.purple;
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" className={`[stop-color:theme(colors.${accent}.400)]`} />
-            <stop offset="100%" className={`[stop-color:theme(colors.${accent}.600)]`} />
+            <stop offset="0%" stopColor={colors.start} />
+            <stop offset="100%" stopColor={colors.end} />
           </linearGradient>
         </defs>
         <circle
@@ -499,7 +507,8 @@ function ProgressRing({
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           strokeLinecap="round"
-          className="transition-[stroke-dashoffset] duration-[1200ms] ease-out"
+          className="transition-[stroke-dashoffset] ease-out"
+          style={{ transitionDuration: "1200ms" }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -509,6 +518,7 @@ function ProgressRing({
     </div>
   );
 }
+
 
 function AnimatedCounter({ value, duration = 900 }: { value: number; duration?: number }) {
   const [display, setDisplay] = useState(0);

@@ -1,527 +1,908 @@
-import { useEffect, useRef, useState, ChangeEvent } from "react";
+import React, { useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth, User } from "@/context/AuthContext";
 import {
-  Github,
-  Linkedin,
+  User as UserIcon,
   Mail,
   Phone,
-  MapPin,
-  Briefcase,
   GraduationCap,
+  BookOpen,
+  Calendar,
+  Github,
+  Linkedin,
+  Globe,
   Edit3,
-  Star,
-  Award,
-  FileText,
-  ExternalLink,
-  X,
-  Check,
-  Plus,
   Camera,
+  Trash2,
+  Lock,
+  LogOut,
+  Check,
+  X,
+  Plus,
+  AlertCircle,
+  KeyRound,
+  ExternalLink,
+  ShieldCheck,
+  Building2,
 } from "lucide-react";
-
-interface Profile {
-  name: string;
-  bio: string;
-  phone: string;
-  email: string;
-  college: string;
-  dreamRole: string;
-  skills: string[];
-  github: string;
-  linkedin: string;
-  resumeScore: number;
-  level: number;
-  xp: number;
-  xpToNext: number;
-  avatarUrl: string;
-  bannerColor: string;
-}
-
-const INITIAL_PROFILE: Profile = {
-  name: "Harini Muthuvel",
-  bio: "Final-year CS student passionate about building products that matter. Love solving complex problems, one commit at a time.",
-  phone: "+91 98765 43210",
-  email: "harini.muthuvel@srmist.edu.in",
-  college: "SRM Institute of Science and Technology, Chennai",
-  dreamRole: "Software Development Engineer @ a product-first company",
-  skills: ["React", "Node.js", "Python", "ML", "SQL", "TypeScript", "DSA", "System Design"],
-  github: "github.com/harini-m",
-  linkedin: "linkedin.com/in/harini-m",
-  resumeScore: 78,
-  level: 12,
-  xp: 4500,
-  xpToNext: 5000,
-  avatarUrl: "",
-  bannerColor: "#1e1b4b",
-};
+import { useToast } from "@/hooks/use-toast";
 
 const SKILL_COLORS = [
-  "bg-violet-500/20 text-violet-300 border-violet-500/30",
-  "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  "bg-teal-500/20 text-teal-300 border-teal-500/30",
-  "bg-pink-500/20 text-pink-300 border-pink-500/30",
-  "bg-amber-500/20 text-amber-300 border-amber-500/30",
-  "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
-  "bg-green-500/20 text-green-300 border-green-500/30",
-  "bg-red-500/20 text-red-300 border-red-500/30",
+  "bg-violet-500/15 text-violet-300 border-violet-500/30",
+  "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
+  "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+  "bg-teal-500/15 text-teal-300 border-teal-500/30",
+  "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30",
 ];
 
-// Editable string keys used in the simple text-input section of the edit modal
-type EditableTextField =
-  | "name"
-  | "phone"
-  | "email"
-  | "college"
-  | "dreamRole"
-  | "github"
-  | "linkedin";
-
-const ScoreRing = ({ score }: { score: number }) => {
-  const radius = 40;
-  const circ = 2 * Math.PI * radius;
-  const filled = (score / 100) * circ;
-  const color = score >= 80 ? "#22d3ee" : score >= 60 ? "#a78bfa" : "#f59e0b";
-  return (
-    <div className="relative inline-flex items-center justify-center">
-      <svg width="100" height="100" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-        <circle
-          cx="50" cy="50" r={radius} fill="none"
-          stroke={color} strokeWidth="8"
-          strokeDasharray={`${filled} ${circ}`}
-          strokeLinecap="round"
-          style={{ transition: "stroke-dasharray 1s ease" }}
-        />
-      </svg>
-      <div className="absolute text-center">
-        <div className="text-xl font-bold text-white">{score}</div>
-        <div className="text-[10px] text-slate-400 leading-tight">/ 100</div>
-      </div>
-    </div>
-  );
-};
-
 export default function Profile() {
-  const [profile, setProfile] = useState<Profile>(INITIAL_PROFILE);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Profile>(INITIAL_PROFILE);
+  const { user, updateProfile, uploadAvatar, removeAvatar, changePassword, logout } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  // Modals state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  // Edit draft state
+  const [draft, setDraft] = useState<Partial<User>>({});
   const [newSkill, setNewSkill] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
-  // Backend-ready image state — these will eventually hold uploaded URLs
-  // returned from the Spring Boot media endpoint. For now they hold local
-  // object URLs created from the picked File for instant preview.
-  const [avatarImage, setAvatarImage] = useState<string | null>(null);
-  const [bannerImage, setBannerImage] = useState<string | null>(null);
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  const bannerInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-  const loadProfile = async () => {
-    try {
-      const response = await fetch("/api/profile");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-      if (!response.ok) {
-        throw new Error("Failed to load profile");
-      }
-
-      const data: Profile = await response.json();
-      setProfile(data);
-      setDraft(data);
-    } catch (err) {
-      setError("Could not load profile from backend.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  loadProfile();
-}, []);
-
-  const startEdit = () => {
-    setDraft({ ...profile });
-    setEditing(true);
-  };
-  const saveEdit = async () => {
-  try {
-    const response = await fetch("/api/profile", {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(draft),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to save profile");
-    }
-
-    const updatedProfile: Profile = await response.json();
-    setProfile(updatedProfile);
-    setDraft(updatedProfile);
-    setEditing(false);
-  } catch (err) {
-    setError("Could not save profile changes.");
+  if (!user) {
+    return null;
   }
-};
-  const cancelEdit = () => setEditing(false);
 
-  const addSkill = () => {
-    const s = newSkill.trim();
-    if (s && !draft.skills.includes(s)) {
-      setDraft({ ...draft, skills: [...draft.skills, s] });
+  const displayName = user.name || user.full_name || "User";
+  const userInitials = displayName
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "U";
+
+  // Open Edit Modal
+  const openEditModal = () => {
+    setDraft({
+      name: user.name || user.full_name || "",
+      college: user.college || "",
+      department: user.department || "",
+      year: user.year || "",
+      bio: user.bio || "",
+      phone: user.phone || "",
+      github: user.github || "",
+      linkedin: user.linkedin || "",
+      skills: [...(user.skills || [])],
+    });
+    setEditError(null);
+    setIsEditOpen(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditError(null);
+
+    if (!draft.name?.trim()) {
+      setEditError("Name cannot be empty.");
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+      await updateProfile(draft);
+      setIsEditOpen(false);
+      toast({
+        title: "Profile Updated",
+        description: "Your professional profile has been successfully saved.",
+      });
+    } catch (err: any) {
+      setEditError(err.message || "Failed to update profile.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // Avatar Upload / Remove
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid file",
+        description: "Please select an image file (PNG, JPG, WEBP).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsUploadingAvatar(true);
+      await uploadAvatar(file);
+      toast({
+        title: "Avatar Updated",
+        description: "Your profile picture has been updated.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Upload Failed",
+        description: err.message || "Could not upload image.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    try {
+      setIsUploadingAvatar(true);
+      await removeAvatar();
+      toast({
+        title: "Avatar Removed",
+        description: "Profile picture reset to default.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Could not remove avatar.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  // Skills in draft
+  const handleAddSkill = () => {
+    const trimmed = newSkill.trim();
+    const currentSkills = draft.skills || [];
+    if (trimmed && !currentSkills.includes(trimmed)) {
+      setDraft({ ...draft, skills: [...currentSkills, trimmed] });
     }
     setNewSkill("");
   };
-  const removeSkill = (sk: string) => {
-    setDraft({ ...draft, skills: draft.skills.filter((s) => s !== sk) });
+
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setDraft({
+      ...draft,
+      skills: (draft.skills || []).filter((s) => s !== skillToRemove),
+    });
   };
 
-  // Generic handler for picking an image file and previewing it via an
-  // object URL. No upload happens here — that's left for the backend pass.
-  const handleImagePick = (
-    e: ChangeEvent<HTMLInputElement>,
-    setter: (url: string) => void
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-    const url = URL.createObjectURL(file);
-    setter(url);
-    // Reset the input so picking the same file again still fires onChange
-    e.target.value = "";
+  // Password Change
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+
+    if (!currentPassword) {
+      setPasswordError("Please enter your current password.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      await changePassword(currentPassword, newPassword);
+      setIsPasswordOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({
+        title: "Password Changed",
+        description: "Your account password has been updated securely.",
+      });
+    } catch (err: any) {
+      setPasswordError(err.message || "Failed to change password.");
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
-  const handleTextChange = (key: EditableTextField, value: string) => {
-    setDraft({ ...draft, [key]: value });
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
   };
 
-  const xpPct = Math.round((profile.xp / profile.xpToNext) * 100);
-
-  const textFields: { label: string; key: EditableTextField; type: string }[] = [
-    { label: "Full Name", key: "name", type: "text" },
-    { label: "Phone", key: "phone", type: "text" },
-    { label: "Email", key: "email", type: "email" },
-    { label: "College", key: "college", type: "text" },
-    { label: "Dream Role", key: "dreamRole", type: "text" },
-    { label: "GitHub", key: "github", type: "text" },
-    { label: "LinkedIn", key: "linkedin", type: "text" },
-  ];
-
-  
-    if (loading) {
   return (
-    <div className="min-h-screen bg-[#0f0e1a] text-white flex items-center justify-center">
-      Loading profile...
-    </div>
-  );
-}
-
-if (error) {
-  return (
-    <div className="min-h-screen bg-[#0f0e1a] text-white flex items-center justify-center">
-      {error}
-    </div>
-  );
-}
-
-return (
-  <div className="min-h-screen bg-[#0f0e1a] text-white pb-20">
-
-      {/* ── Banner ── */}
-      <div className="relative h-52 overflow-hidden group">
-        {bannerImage ? (
-          <img
-            src={bannerImage}
-            alt="Profile banner"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        ) : (
-          <div
-            className="absolute inset-0"
-            style={{
-              background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4c1d95 70%, #1e1b4b 100%)",
-            }}
-          />
-        )}
-        <div className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: "radial-gradient(circle at 20% 50%, #7c3aed33 0%, transparent 50%), radial-gradient(circle at 80% 20%, #4f46e533 0%, transparent 50%)",
-          }}
-        />
-        {/* grid lines */}
-        <svg className="absolute inset-0 w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-
-        {/* Level badge */}
-        <div className="absolute top-5 right-5 flex items-center gap-2 bg-black/30 backdrop-blur-sm border border-violet-500/30 rounded-full px-3 py-1.5">
-          <Star size={14} className="text-amber-400 fill-amber-400" />
-          <span className="text-xs font-semibold text-amber-300">Level {profile.level}</span>
+    <div className="space-y-8 animate-fade-in max-w-5xl mx-auto pb-16">
+      {/* ── Profile Header & Banner ── */}
+      <div className="relative rounded-3xl bg-[#121124]/90 border border-white/10 overflow-hidden shadow-2xl backdrop-blur-xl">
+        {/* Banner Graphic */}
+        <div className="h-44 w-full bg-gradient-to-r from-violet-900/60 via-indigo-900/50 to-purple-900/60 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(124,58,237,0.3),transparent_70%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:24px_24px]" />
         </div>
 
-        {/* Edit profile button */}
-        <button
-          onClick={startEdit}
-          className="absolute top-5 left-5 flex items-center gap-1.5 bg-black/30 backdrop-blur-sm border border-white/10 text-slate-300 hover:text-white hover:border-violet-400/50 rounded-full px-3 py-1.5 text-xs font-medium transition-all"
-        >
-          <Edit3 size={13} />
-          Edit Profile
-        </button>
+        {/* User Info Bar */}
+        <div className="px-6 sm:px-8 pb-8 pt-0 relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-6 -mt-16 sm:-mt-14 mb-4">
+            {/* Avatar & Identifiers */}
+            <div className="flex items-end gap-5">
+              {/* Avatar Container */}
+              <div className="relative group">
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl border-4 border-[#121124] bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-3xl font-bold text-white shadow-2xl overflow-hidden ring-1 ring-white/20">
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={displayName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{userInitials}</span>
+                  )}
 
-        {/* Banner edit (camera) overlay — visible on hover */}
-        <button
-          onClick={() => bannerInputRef.current?.click()}
-          aria-label="Change banner image"
-          className="absolute bottom-4 right-5 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm border border-white/15 text-slate-200 hover:text-white hover:border-violet-400/50 rounded-full px-3 py-1.5 text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <Camera size={13} />
-          Change Banner
-        </button>
-        <input
-          ref={bannerInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => handleImagePick(e, setBannerImage)}
-        />
-      </div>
-
-      {/* ── Avatar + Name ── */}
-      <div className="max-w-4xl mx-auto px-6">
-        <div className="relative flex items-end gap-5 -mt-14 mb-8">
-          <div className="relative group">
-            <div className="w-24 h-24 rounded-2xl border-4 border-[#0f0e1a] bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center text-3xl font-bold text-white shadow-lg overflow-hidden">
-              {avatarImage ? (
-                <img src={avatarImage} alt="Profile avatar" className="w-full h-full object-cover" />
-              ) : (
-                profile.name.split(" ").map((n) => n[0]).join("").slice(0, 2)
-              )}
-            </div>
-            <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full w-4 h-4 border-2 border-[#0f0e1a]" />
-
-            {/* Avatar edit (camera) button */}
-            <button
-              onClick={() => avatarInputRef.current?.click()}
-              aria-label="Change profile picture"
-              className="absolute -bottom-1 -left-1 bg-violet-600 hover:bg-violet-500 border-2 border-[#0f0e1a] rounded-full w-7 h-7 flex items-center justify-center text-white transition-colors"
-            >
-              <Camera size={12} />
-            </button>
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handleImagePick(e, setAvatarImage)}
-            />
-          </div>
-          <div className="pb-1.5">
-            <h1 className="text-2xl font-bold text-white tracking-tight">{profile.name}</h1>
-            <p className="text-xs text-violet-400 font-medium mt-1.5 flex items-center gap-1.5">
-              <Award size={12} />
-              {profile.xp.toLocaleString()} XP · {xpPct}% to Level {profile.level + 1}
-            </p>
-          </div>
-        </div>
-
-        {/* XP bar */}
-        <div className="mb-10">
-          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-400"
-              style={{ width: `${xpPct}%`, transition: "width 1s ease" }}
-            />
-          </div>
-        </div>
-
-        {/* ── Info Cards Grid ── */}
-        <div className="grid grid-cols-1 gap-5 mb-5">
-
-          {/* Bio */}
-          <div className="bg-white/5 border border-white/8 rounded-2xl p-6">
-            <p className="text-sm text-slate-300 leading-relaxed">{profile.bio}</p>
-          </div>
-
-          {/* Contact details */}
-          <div className="bg-white/5 border border-white/8 rounded-2xl p-6">
-            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold mb-4">Contact</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-6">
-              {[
-                { icon: Phone, label: "Phone", val: profile.phone },
-                { icon: Mail, label: "Email", val: profile.email },
-                { icon: GraduationCap, label: "College", val: profile.college },
-                { icon: Briefcase, label: "Dream Role", val: profile.dreamRole },
-              ].map(({ icon: Icon, label, val }) => (
-                <div key={label} className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-violet-500/15 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Icon size={15} className="text-violet-400" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-500 uppercase tracking-wide font-medium">{label}</p>
-                    <p className="text-sm text-slate-200 mt-1 leading-snug">{val}</p>
-                  </div>
+                  {isUploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Skills */}
-          <div className="bg-white/5 border border-white/8 rounded-2xl p-6">
-            <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold mb-4">Skills</p>
-            <div className="flex flex-wrap gap-2.5">
-              {profile.skills.map((sk, i) => (
-                <span
-                  key={sk}
-                  className={`text-xs px-3.5 py-1.5 rounded-full border font-medium ${SKILL_COLORS[i % SKILL_COLORS.length]}`}
-                >
-                  {sk}
-                </span>
-              ))}
-            </div>
-          </div>
+                {/* Avatar Actions Overlay */}
+                <div className="absolute bottom-1 right-1 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Change Photo"
+                    className="p-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-600/40 border border-white/20 transition-all active:scale-95"
+                  >
+                    <Camera className="w-4 h-4" />
+                  </button>
 
-          {/* Links + Resume Score */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="bg-white/5 border border-white/8 rounded-2xl p-6 flex flex-col gap-4">
-              <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Links</p>
-              <a
-                href={`https://${profile.github}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2.5 text-sm text-slate-300 hover:text-white transition-colors group"
-              >
-                <Github size={16} className="text-slate-400 group-hover:text-white" />
-                <span className="truncate">{profile.github.replace("github.com/", "")}</span>
-                <ExternalLink size={11} className="text-slate-500 ml-auto" />
-              </a>
-              <a
-                href={`https://${profile.linkedin}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2.5 text-sm text-slate-300 hover:text-white transition-colors group"
-              >
-                <Linkedin size={16} className="text-blue-400 group-hover:text-blue-300" />
-                <span className="truncate">{profile.linkedin.replace("linkedin.com/in/", "")}</span>
-                <ExternalLink size={11} className="text-slate-500 ml-auto" />
-              </a>
-              {/* Reserved slot for a future Portfolio link */}
-              <div className="flex items-center gap-2.5 text-sm text-slate-500">
-                <MapPin size={16} className="text-slate-600" />
-                <span className="italic">Portfolio link coming soon</span>
-              </div>
-            </div>
-
-            <div className="bg-white/5 border border-white/8 rounded-2xl p-6 flex flex-col items-center justify-center gap-2">
-              <p className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold mb-2 flex items-center gap-1.5 self-start">
-                <FileText size={11} /> Resume Score
-              </p>
-              <ScoreRing score={profile.resumeScore} />
-              <p className="text-[11px] text-slate-400 text-center mt-2">
-                {profile.resumeScore >= 80 ? "Strong resume 🎉" : profile.resumeScore >= 60 ? "Good — room to grow" : "Needs work"}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Edit Modal ── */}
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-[#13111f] border border-white/10 rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-white/8">
-              <h2 className="font-semibold text-white text-lg">Edit Profile</h2>
-              <button onClick={cancelEdit} className="text-slate-400 hover:text-white transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-6 flex flex-col gap-5">
-              {textFields.map(({ label, key, type }) => (
-                <div key={key}>
-                  <label className="block text-[11px] text-slate-400 uppercase tracking-wide mb-2">{label}</label>
-                  <input
-                    type={type}
-                    value={draft[key]}
-                    onChange={(e) => handleTextChange(key, e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
-                  />
+                  {user.avatar && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveAvatar}
+                      title="Remove Photo"
+                      className="p-2 rounded-xl bg-red-600/80 hover:bg-red-500 text-white shadow-lg border border-white/20 transition-all active:scale-95"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-              ))}
 
-              <div>
-                <label className="block text-[11px] text-slate-400 uppercase tracking-wide mb-2">Bio</label>
-                <textarea
-                  value={draft.bio}
-                  onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
-                  rows={3}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarFileChange}
+                  className="hidden"
                 />
               </div>
 
+              {/* Name & Academic Chips */}
+              <div className="pb-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-white font-display tracking-tight">
+                    {displayName}
+                  </h1>
+                  {user.year && (
+                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                      {user.year}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-sm text-slate-400 mt-1 flex items-center gap-2">
+                  <Mail className="w-3.5 h-3.5 text-slate-500" />
+                  {user.email}
+                </p>
+
+                {(user.college || user.department) && (
+                  <p className="text-xs text-slate-400 mt-1 flex items-center gap-1.5 font-medium">
+                    <GraduationCap className="w-3.5 h-3.5 text-violet-400" />
+                    {[user.department, user.college].filter(Boolean).join(" • ")}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto mt-2 sm:mt-0">
+              <button
+                onClick={openEditModal}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-lg shadow-violet-600/20 transition-all active:scale-95"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                Edit Profile
+              </button>
+
+              <button
+                onClick={() => {
+                  setPasswordError(null);
+                  setCurrentPassword("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                  setIsPasswordOpen(true);
+                }}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 text-xs font-semibold transition-all active:scale-95"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-violet-400" />
+                Change Password
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition-all active:scale-95"
+                title="Logout"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Content Grid ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column (2 Cols) */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* About / Bio */}
+          <div className="bg-[#121124]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-xl">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+              <UserIcon className="w-4 h-4 text-violet-400" />
+              About Me
+            </h2>
+            {user.bio ? (
+              <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-line">
+                {user.bio}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500 italic">
+                No bio added yet. Click "Edit Profile" to share your summary, career goals, or background.
+              </p>
+            )}
+          </div>
+
+          {/* Academic & University Details */}
+          <div className="bg-[#121124]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-xl">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-5 flex items-center gap-2">
+              <GraduationCap className="w-4 h-4 text-violet-400" />
+              Academic Information
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Building2 className="w-4 h-4 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">College / University</p>
+                  <p className="text-sm font-medium text-slate-200 mt-0.5">
+                    {user.college || "Not specified"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <BookOpen className="w-4 h-4 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Department / Discipline</p>
+                  <p className="text-sm font-medium text-slate-200 mt-0.5">
+                    {user.department || "Not specified"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Calendar className="w-4 h-4 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Academic Year</p>
+                  <p className="text-sm font-medium text-slate-200 mt-0.5">
+                    {user.year || "Not specified"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <ShieldCheck className="w-4 h-4 text-violet-400" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Account Status</p>
+                  <p className="text-sm font-medium text-emerald-400 mt-0.5 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    Verified Student Account
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Technical Skills */}
+          <div className="bg-[#121124]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-violet-400" />
+                Skills & Technologies
+              </h2>
+              <button
+                onClick={openEditModal}
+                className="text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium"
+              >
+                + Manage Skills
+              </button>
+            </div>
+
+            {user.skills && user.skills.length > 0 ? (
+              <div className="flex flex-wrap gap-2.5">
+                {user.skills.map((skill, index) => (
+                  <span
+                    key={skill}
+                    className={`text-xs px-3.5 py-1.5 rounded-xl border font-medium transition-all ${
+                      SKILL_COLORS[index % SKILL_COLORS.length]
+                    }`}
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500 italic">
+                No skills added yet. Add your core languages, frameworks, and domains to improve placement recommendations.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column (1 Col) */}
+        <div className="space-y-6">
+          {/* Contact & Verification */}
+          <div className="bg-[#121124]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-xl space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+              <Mail className="w-4 h-4 text-violet-400" />
+              Contact Information
+            </h2>
+
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Email</p>
+              <p className="text-sm text-slate-200 font-medium mt-0.5 break-all">{user.email}</p>
+            </div>
+
+            <div>
+              <p className="text-xs text-slate-500 font-medium">Phone</p>
+              <p className="text-sm text-slate-200 font-medium mt-0.5">
+                {user.phone || "Not provided"}
+              </p>
+            </div>
+          </div>
+
+          {/* Professional Links */}
+          <div className="bg-[#121124]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-xl space-y-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-violet-400" />
+              Professional Links
+            </h2>
+
+            {/* GitHub */}
+            {user.github ? (
+              <a
+                href={user.github.startsWith("http") ? user.github : `https://${user.github}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all group"
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <Github className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                  <span className="text-xs font-medium truncate">{user.github}</span>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 ml-2" />
+              </a>
+            ) : (
+              <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs text-slate-500 flex items-center gap-2">
+                <Github className="w-4 h-4 text-slate-600" />
+                <span>GitHub profile not linked</span>
+              </div>
+            )}
+
+            {/* LinkedIn */}
+            {user.linkedin ? (
+              <a
+                href={user.linkedin.startsWith("http") ? user.linkedin : `https://${user.linkedin}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-all group"
+              >
+                <div className="flex items-center gap-2.5 truncate">
+                  <Linkedin className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs font-medium truncate">{user.linkedin}</span>
+                </div>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-500 flex-shrink-0 ml-2" />
+              </a>
+            ) : (
+              <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-xs text-slate-500 flex items-center gap-2">
+                <Linkedin className="w-4 h-4 text-slate-600" />
+                <span>LinkedIn profile not linked</span>
+              </div>
+            )}
+          </div>
+
+          {/* Account Security & Actions */}
+          <div className="bg-[#121124]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-7 shadow-xl space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+              <Lock className="w-4 h-4 text-violet-400" />
+              Account Settings
+            </h2>
+
+            <button
+              onClick={() => {
+                setPasswordError(null);
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setIsPasswordOpen(true);
+              }}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-medium border border-white/10 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <KeyRound className="w-4 h-4 text-violet-400" />
+                <span>Change Password</span>
+              </div>
+              <span className="text-[10px] text-slate-500 font-semibold uppercase">Update</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-between p-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-medium border border-red-500/20 transition-colors"
+            >
+              <div className="flex items-center gap-2.5">
+                <LogOut className="w-4 h-4 text-red-400" />
+                <span>Logout from Session</span>
+              </div>
+              <span className="text-[10px] text-red-400 font-semibold uppercase">Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── EDIT PROFILE MODAL ── */}
+      {isEditOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="w-full max-w-2xl bg-[#131127] border border-white/15 rounded-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b border-white/10 sticky top-0 bg-[#131127] z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-violet-600/20 text-violet-400 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <h2 className="font-bold text-white text-lg">Edit Professional Profile</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleSaveProfile} className="p-6 space-y-5">
+              {editError && (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{editError}</span>
+                </div>
+              )}
+
+              {/* Full Name & Phone */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Full Name <span className="text-violet-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.name || ""}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                    required
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.phone || ""}
+                    onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+                    placeholder="+91 98765 43210"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* College & Department */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    College / University
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.college || ""}
+                    onChange={(e) => setDraft({ ...draft, college: e.target.value })}
+                    placeholder="e.g. SRM Institute of Science and Technology"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Department / Major
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.department || ""}
+                    onChange={(e) => setDraft({ ...draft, department: e.target.value })}
+                    placeholder="e.g. Computer Science & Engineering"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Academic Year */}
               <div>
-                <label className="block text-[11px] text-slate-400 uppercase tracking-wide mb-3">Skills</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {draft.skills.map((sk) => (
-                    <span key={sk} className="flex items-center gap-1.5 text-xs bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-3 py-1.5">
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Academic Year
+                </label>
+                <select
+                  value={draft.year || ""}
+                  onChange={(e) => setDraft({ ...draft, year: e.target.value })}
+                  className="w-full bg-[#1c1a32] border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                >
+                  <option value="">Select Year</option>
+                  <option value="1st Year">1st Year</option>
+                  <option value="2nd Year">2nd Year</option>
+                  <option value="3rd Year">3rd Year</option>
+                  <option value="4th Year / Final Year">4th Year / Final Year</option>
+                  <option value="Postgraduate">Postgraduate</option>
+                </select>
+              </div>
+
+              {/* Bio */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Professional Bio / Career Summary
+                </label>
+                <textarea
+                  value={draft.bio || ""}
+                  onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
+                  rows={3}
+                  placeholder="Passionate engineer interested in..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                />
+              </div>
+
+              {/* Skills */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                  Skills & Technologies
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2.5">
+                  {(draft.skills || []).map((sk) => (
+                    <span
+                      key={sk}
+                      className="inline-flex items-center gap-1.5 text-xs bg-violet-500/20 text-violet-300 border border-violet-500/30 rounded-full px-3 py-1"
+                    >
                       {sk}
-                      <button onClick={() => removeSkill(sk)} className="text-violet-400 hover:text-red-400 transition-colors">
-                        <X size={11} />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkill(sk)}
+                        className="hover:text-red-400 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
                       </button>
                     </span>
                   ))}
                 </div>
                 <div className="flex gap-2">
                   <input
+                    type="text"
                     value={newSkill}
                     onChange={(e) => setNewSkill(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addSkill()}
-                    placeholder="Add skill…"
-                    className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddSkill();
+                      }
+                    }}
+                    placeholder="Add a new skill (Press Enter)"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
                   />
                   <button
-                    onClick={addSkill}
-                    className="px-3.5 py-2.5 bg-violet-600 hover:bg-violet-500 rounded-lg text-white transition-colors"
+                    type="button"
+                    onClick={handleAddSkill}
+                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 hover:text-white transition-colors"
                   >
-                    <Plus size={16} />
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] text-slate-400 uppercase tracking-wide mb-2">
-                  Resume Score (self-assess)
-                </label>
-                <div className="flex items-center gap-3">
+              {/* GitHub & LinkedIn */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    GitHub Profile
+                  </label>
                   <input
-                    type="range" min="0" max="100"
-                    value={draft.resumeScore}
-                    onChange={(e) => setDraft({ ...draft, resumeScore: Number(e.target.value) })}
-                    className="flex-1 accent-violet-500"
+                    type="text"
+                    value={draft.github || ""}
+                    onChange={(e) => setDraft({ ...draft, github: e.target.value })}
+                    placeholder="github.com/username"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
                   />
-                  <span className="text-sm font-semibold text-violet-300 w-10 text-right">{draft.resumeScore}</span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    LinkedIn Profile
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.linkedin || ""}
+                    onChange={(e) => setDraft({ ...draft, linkedin: e.target.value })}
+                    placeholder="linkedin.com/in/username"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                  />
                 </div>
               </div>
+
+              {/* Modal Footer */}
+              <div className="flex gap-3 pt-4 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProfile}
+                  className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-lg shadow-violet-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isSavingProfile ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Save Changes
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── CHANGE PASSWORD MODAL ── */}
+      {isPasswordOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-[#131127] border border-white/15 rounded-3xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-violet-600/20 text-violet-400 flex items-center justify-center">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <h2 className="font-bold text-white text-lg">Change Password</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPasswordOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="flex gap-3 p-6 border-t border-white/8">
-              <button
-                onClick={cancelEdit}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-sm font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveEdit}
-                className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-              >
-                <Check size={15} /> Save Changes
-              </button>
-            </div>
+            <form onSubmit={handleChangePassword} className="p-6 space-y-4">
+              {passwordError && (
+                <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{passwordError}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min. 6 characters"
+                  required
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-violet-500 transition-colors"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-300 hover:text-white text-xs font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingPassword}
+                  className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-lg shadow-violet-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isChangingPassword ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Update Password
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
