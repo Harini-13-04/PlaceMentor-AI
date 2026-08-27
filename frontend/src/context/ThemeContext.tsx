@@ -13,7 +13,11 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
     const saved = localStorage.getItem("pm_theme") as Theme | null;
-    return saved || "dark";
+    if (saved === "light" || saved === "dark") return saved;
+    if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+    return "dark"; // Default to dark theme
   });
 
   useEffect(() => {

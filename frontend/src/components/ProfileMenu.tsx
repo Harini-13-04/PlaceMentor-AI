@@ -7,6 +7,7 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 
 export default function ProfileMenu() {
@@ -36,16 +37,17 @@ export default function ProfileMenu() {
       {/* Profile Trigger Button */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 border border-border bg-card hover:bg-secondary transition-colors"
+        className="flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 border border-border bg-card hover:bg-secondary transition-colors"
       >
         <img
           src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
           alt="Profile"
-          className="w-6 h-6 rounded-full border border-border object-cover"
+          className="w-7 h-7 rounded-full border border-purple-500/40 object-cover"
         />
 
         <div className="hidden sm:block text-left">
-          <p className="text-xs font-semibold text-foreground leading-tight">{user?.name || "Student"}</p>
+          <p className="text-xs font-bold text-foreground leading-tight">{user?.name || "Student"}</p>
+          <p className="text-[10px] text-muted-foreground">{user?.department || "CSE"}</p>
         </div>
 
         <ChevronDown
@@ -57,17 +59,17 @@ export default function ProfileMenu() {
 
       {/* Dropdown Menu */}
       {open && (
-        <div className="absolute right-0 mt-2 w-56 rounded-xl border border-border bg-card shadow-lg overflow-hidden z-50 animate-fade-in">
+        <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-border bg-card shadow-2xl overflow-hidden z-50 animate-fade-in">
           {/* Header */}
-          <div className="p-3 border-b border-border bg-secondary/30 flex items-center gap-2.5">
+          <div className="p-3.5 border-b border-border bg-secondary/40 flex items-center gap-3">
             <img
               src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
               alt="Profile"
-              className="w-8 h-8 rounded-full border border-border object-cover"
+              className="w-9 h-9 rounded-full border border-purple-500/40 object-cover"
             />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-foreground truncate">{user?.name || "Student"}</p>
-              <p className="text-[11px] text-muted-foreground truncate">{user?.email || "student@srmist.edu.in"}</p>
+              <p className="text-xs font-bold text-foreground truncate">{user?.name || "Harini Muthuvel"}</p>
+              <p className="text-[10px] text-muted-foreground truncate font-mono">{user?.email || "harini.muthuvel@srmist.edu.in"}</p>
             </div>
           </div>
 
@@ -78,7 +80,7 @@ export default function ProfileMenu() {
                 navigate("/profile");
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary hover:text-purple-300 transition-colors text-left"
             >
               <User className="w-3.5 h-3.5 text-muted-foreground" />
               <span>Candidate Profile</span>
@@ -89,7 +91,7 @@ export default function ProfileMenu() {
                 navigate("/placement-readiness");
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary hover:text-purple-300 transition-colors text-left"
             >
               <BarChart3 className="w-3.5 h-3.5 text-muted-foreground" />
               <span>Placement Readiness</span>
@@ -100,7 +102,7 @@ export default function ProfileMenu() {
                 navigate("/settings");
                 setOpen(false);
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-foreground hover:bg-secondary transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-foreground hover:bg-secondary hover:text-purple-300 transition-colors text-left"
             >
               <Settings className="w-3.5 h-3.5 text-muted-foreground" />
               <span>Settings</span>
@@ -110,7 +112,7 @@ export default function ProfileMenu() {
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors text-left font-medium"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 transition-colors text-left font-semibold"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Sign Out</span>

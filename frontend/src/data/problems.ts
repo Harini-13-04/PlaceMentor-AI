@@ -52,17 +52,36 @@ function makeStarter(
   sqlQuery: string = ""
 ) {
   return {
-    python3: `class Solution:\n    def ${funcName}(self, ${paramsPy}) -> ${returnPy}:\n        # Write your code below\n        \n`,
-    python: `def ${funcName}(${paramsPy}):\n    # Write your code below\n    \n`,
-    java: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your code below\n        \n    }\n}\n`,
-    java17: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your code below\n        \n    }\n}\n`,
+    python3: `class Solution:\n    def ${funcName}(self, ${paramsPy}) -> ${returnPy}:\n        # Write your solution below\n        \n`,
+    python: `def ${funcName}(${paramsPy}):\n    # Write your solution below\n    \n`,
+    java: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your solution below\n        \n    }\n}\n`,
+    java17: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your solution below\n        \n    }\n}\n`,
     sql: sqlQuery,
     numpy: `import numpy as np\n\ndef ${funcName}(arr):\n    # Write your vectorized NumPy solution\n    \n`,
-    c: `${cppRet === "vector<int>" ? "int*" : cppRet} ${funcName}(${paramsCpp}) {\n    // Write your code below\n    \n}\n`,
-    cpp: `class Solution {\npublic:\n    ${cppRet} ${funcName}(${paramsCpp}) {\n        // Write your code below\n        \n    }\n};\n`,
-    javascript: `/**\n * @param {${jsParams}}\n * @return {${returnPy}}\n */\nfunction ${funcName}(${jsParams.replace(/: [a-zA-Z<>\[\], ]+/g, "")}) {\n    // Write your code below\n    \n}\n`,
+    c: `${cppRet === "vector<int>" ? "int*" : cppRet} ${funcName}(${paramsCpp}) {\n    // Write your solution below\n    \n}\n`,
+    cpp: `class Solution {\npublic:\n    ${cppRet} ${funcName}(${paramsCpp}) {\n        // Write your solution below\n        \n    }\n};\n`,
+    javascript: `/**\n * @param {${jsParams}}\n * @return {${returnPy}}\n */\nfunction ${funcName}(${jsParams.replace(/: [a-zA-Z<>\[\], ]+/g, "")}) {\n    // Write your solution below\n    \n}\n`,
   };
 }
+
+export const TOP_COMPANIES = [
+  "All Companies",
+  "TCS",
+  "Infosys",
+  "Wipro",
+  "Accenture",
+  "Cognizant",
+  "Capgemini",
+  "Amazon",
+  "Microsoft",
+  "Google",
+  "Zoho",
+  "Deloitte",
+  "IBM",
+  "HCL",
+  "Tech Mahindra",
+  "Freshworks",
+];
 
 export const PROBLEMS_DATASET: Problem[] = [
   // ----------------------------------------------------
@@ -74,7 +93,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Algorithms & DSA",
     topic: "Arrays",
-    companies: ["Amazon", "Google", "Microsoft", "TCS", "Infosys"],
+    companies: ["Amazon", "Google", "Microsoft", "TCS", "Infosys", "Zoho"],
     status: "Solved",
     mastery: 100,
     description: "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nYou can return the answer in any order.",
@@ -131,7 +150,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Algorithms & DSA",
     topic: "Arrays",
-    companies: ["Amazon", "Microsoft", "Accenture", "Wipro"],
+    companies: ["Amazon", "Microsoft", "Accenture", "Wipro", "TCS", "Cognizant"],
     status: "Solved",
     mastery: 100,
     description: "Given an integer array `nums`, return `true` if any value appears at least twice in the array, and return `false` if every element is distinct.",
@@ -168,7 +187,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Algorithms & DSA",
     topic: "Strings",
-    companies: ["Google", "Amazon", "Cognizant", "TCS"],
+    companies: ["Google", "Amazon", "Cognizant", "TCS", "Capgemini", "Freshworks"],
     status: "Attempted",
     mastery: 60,
     description: "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn Anagram is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
@@ -204,7 +223,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Medium",
     category: "Algorithms & DSA",
     topic: "Strings",
-    companies: ["Amazon", "Microsoft", "Google", "Uber"],
+    companies: ["Amazon", "Microsoft", "Google", "Zoho", "Deloitte", "IBM"],
     status: "Not Started",
     mastery: 0,
     description: "Given an array of strings `strs`, group the anagrams together. You can return the answer in any order.",
@@ -239,8 +258,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     title: "Top K Frequent Elements",
     difficulty: "Medium",
     category: "Algorithms & DSA",
-    topic: "Hashing",
-    companies: ["Amazon", "Facebook", "Microsoft"],
+    topic: "Hash Table",
+    companies: ["Amazon", "Microsoft", "Google", "HCL", "Accenture", "Infosys"],
     status: "Not Started",
     mastery: 0,
     description: "Given an integer array `nums` and an integer `k`, return the `k` most frequent elements. You may return the answer in any order.",
@@ -273,8 +292,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     title: "Product of Array Except Self",
     difficulty: "Medium",
     category: "Algorithms & DSA",
-    topic: "Prefix Sum",
-    companies: ["Amazon", "Microsoft", "Apple", "Google"],
+    topic: "Arrays",
+    companies: ["Amazon", "Microsoft", "Google", "Wipro", "Capgemini", "Deloitte"],
     status: "Not Started",
     mastery: 0,
     description: "Given an integer array `nums`, return an array `answer` such that `answer[i]` is equal to the product of all the elements of `nums` except `nums[i]`.\n\nThe product of any prefix or suffix of `nums` is guaranteed to fit in a 32-bit integer.\n\nYou must write an algorithm that runs in O(n) time and without using the division operation.",
@@ -312,7 +331,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Algorithms & DSA",
     topic: "Two Pointers",
-    companies: ["Facebook", "Microsoft", "Amazon"],
+    companies: ["Microsoft", "Amazon", "TCS", "Cognizant", "Zoho", "HCL"],
     status: "Solved",
     mastery: 100,
     description: "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.",
@@ -345,7 +364,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Medium",
     category: "Algorithms & DSA",
     topic: "Two Pointers",
-    companies: ["Amazon", "Facebook", "Microsoft", "Google"],
+    companies: ["Amazon", "Microsoft", "Google", "Infosys", "IBM", "Accenture"],
     status: "Attempted",
     mastery: 50,
     description: "Given an integer array nums, return all the triplets `[nums[i], nums[j], nums[k]]` such that `i != j`, `i != k`, and `j != k`, and `nums[i] + nums[j] + nums[k] == 0`.\n\nNotice that the solution set must not contain duplicate triplets.",
@@ -380,8 +399,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     title: "Container With Most Water",
     difficulty: "Medium",
     category: "Algorithms & DSA",
-    topic: "Two Pointers",
-    companies: ["Google", "Amazon", "Adobe"],
+    topic: "Greedy",
+    companies: ["Google", "Amazon", "Adobe", "Freshworks", "TCS"],
     status: "Not Started",
     mastery: 0,
     description: "You are given an integer array `height` of length `n`. Find two lines that together with the x-axis form a container, such that the container contains the most water.\n\nReturn the maximum amount of water a container can store.",
@@ -411,8 +430,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     title: "Longest Substring Without Repeating Characters",
     difficulty: "Medium",
     category: "Algorithms & DSA",
-    topic: "Sliding Window",
-    companies: ["Amazon", "Microsoft", "Google", "Bloomberg"],
+    topic: "Strings",
+    companies: ["Amazon", "Microsoft", "Google", "Cognizant", "Wipro", "Zoho"],
     status: "Attempted",
     mastery: 50,
     description: "Given a string `s`, find the length of the longest substring without repeating characters.",
@@ -449,7 +468,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Algorithms & DSA",
     topic: "Stack",
-    companies: ["Amazon", "Microsoft", "Google", "Facebook"],
+    companies: ["Amazon", "Microsoft", "Google", "TCS", "Infosys", "Capgemini"],
     status: "Solved",
     mastery: 100,
     description: "Given a string `s` containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
@@ -482,7 +501,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Algorithms & DSA",
     topic: "Linked List",
-    companies: ["Amazon", "Microsoft", "Google", "Apple"],
+    companies: ["Amazon", "Microsoft", "Google", "Accenture", "HCL", "IBM"],
     status: "Solved",
     mastery: 100,
     description: "Given the `head` of a singly linked list, reverse the list, and return the reversed list.",
@@ -510,7 +529,7 @@ export const PROBLEMS_DATASET: Problem[] = [
   },
 
   // ----------------------------------------------------
-  // TREES & BINARY SEARCH
+  // TREES & GRAPHS
   // ----------------------------------------------------
   {
     id: "invert-binary-tree",
@@ -518,7 +537,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Algorithms & DSA",
     topic: "Trees",
-    companies: ["Google", "Amazon", "Microsoft"],
+    companies: ["Google", "Amazon", "Microsoft", "Deloitte", "Zoho"],
     status: "Solved",
     mastery: 100,
     description: "Given the `root` of a binary tree, invert the tree, and return its root.",
@@ -545,31 +564,62 @@ export const PROBLEMS_DATASET: Problem[] = [
     ]
   },
   {
-    id: "binary-search",
-    title: "Binary Search",
-    difficulty: "Easy",
+    id: "number-of-islands",
+    title: "Number of Islands",
+    difficulty: "Medium",
     category: "Algorithms & DSA",
-    topic: "Binary Search",
-    companies: ["Microsoft", "Google", "Apple"],
-    status: "Solved",
-    mastery: 100,
-    description: "Given an array of integers `nums` sorted in ascending order, and an integer `target`, write a function to search `target` in `nums`. If `target` exists, return its index. Otherwise, return -1.",
+    topic: "Graphs",
+    companies: ["Amazon", "Google", "Microsoft", "TCS", "Infosys", "IBM"],
+    status: "Not Started",
+    mastery: 0,
+    description: "Given an `m x n` 2D binary grid `grid` which represents a map of '1's (land) and '0's (water), return the number of islands.\n\nAn island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically.",
     examples: [
-      { input: "nums = [-1,0,3,5,9,12], target = 9", output: "4" },
-      { input: "nums = [-1,0,3,5,9,12], target = 2", output: "-1" }
+      { input: 'grid = [["1","1","1","1","0"],["1","1","0","1","0"],["1","1","0","0","0"],["0","0","0","0","0"]]', output: "1" }
     ],
-    constraints: ["1 <= nums.length <= 10^4", "-10^4 < nums[i], target < 10^4", "All integers in nums are unique."],
-    hints: ["Compare target with middle element and halve search interval."],
-    optimalApproach: ["Initialize l=0, r=len-1. Calculate mid = l + (r-l)//2. Move l or r based on comparison."],
-    timeComplexity: "O(log n)",
-    spaceComplexity: "O(1)",
-    starterCodes: makeStarter("search", "nums: list[int], target: int", "int", "int", "int[] nums, int target", "int", "vector<int>& nums, int target", "nums: number[], target: number"),
+    constraints: ["m == grid.length", "n == grid[i].length", "1 <= m, n <= 300"],
+    hints: ["Iterate through grid; when encountering '1', trigger DFS/BFS to sink the connected island and increment counter."],
+    optimalApproach: [
+      "Iterate over all cells (r, c).",
+      "When `grid[r][c] == '1'`, increment `count` and launch DFS to mark all adjacent '1's as '0'.",
+      "Return total count."
+    ],
+    timeComplexity: "O(m * n)",
+    spaceComplexity: "O(m * n)",
+    starterCodes: makeStarter("numIslands", "grid: list[list[str]]", "int", "int", "char[][] grid", "int", "vector<vector<char>>& grid", "grid: string[][]"),
     testCases: [
-      { input: "nums = [-1,0,3,5,9,12], target = 9", expectedOutput: "4" }
+      { input: 'grid = [["1","1","0"],["1","1","0"],["0","0","1"]]', expectedOutput: "2" }
     ],
     hiddenTestCases: [
-      { input: "nums = [5], target = 5", expectedOutput: "0", isHidden: true },
-      { input: "nums = [2,5], target = 5", expectedOutput: "1", isHidden: true }
+      { input: 'grid = [["1"]]', expectedOutput: "1", isHidden: true }
+    ]
+  },
+  {
+    id: "merge-intervals",
+    title: "Merge Intervals",
+    difficulty: "Medium",
+    category: "Algorithms & DSA",
+    topic: "Sorting",
+    companies: ["Amazon", "Microsoft", "Google", "Accenture", "Zoho", "Cognizant"],
+    status: "Not Started",
+    mastery: 0,
+    description: "Given an array of `intervals` where `intervals[i] = [start_i, end_i]`, merge all overlapping intervals, and return an array of the non-overlapping intervals that cover all the intervals in the input.",
+    examples: [
+      { input: "intervals = [[1,3],[2,6],[8,10],[15,18]]", output: "[[1,6],[8,10],[15,18]]" }
+    ],
+    constraints: ["1 <= intervals.length <= 10^4", "intervals[i].length == 2"],
+    hints: ["Sort intervals by start time; then compare current start with previous end."],
+    optimalApproach: [
+      "Sort `intervals` by `start`.",
+      "Iterate through sorted list. If current interval overlaps with last in `res`, update `last.end = max(last.end, curr.end)`. Otherwise append."
+    ],
+    timeComplexity: "O(n log n)",
+    spaceComplexity: "O(n)",
+    starterCodes: makeStarter("merge", "intervals: list[list[int]]", "list[list[int]]", "int[][]", "int[][] intervals", "vector<vector<int>>", "vector<vector<int>>& intervals", "intervals: number[][]"),
+    testCases: [
+      { input: "intervals = [[1,3],[2,6],[8,10],[15,18]]", expectedOutput: "[[1,6],[8,10],[15,18]]" }
+    ],
+    hiddenTestCases: [
+      { input: "intervals = [[1,4],[4,5]]", expectedOutput: "[[1,5]]", isHidden: true }
     ]
   },
 
@@ -581,8 +631,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     title: "Climbing Stairs",
     difficulty: "Easy",
     category: "Algorithms & DSA",
-    topic: "Dynamic Programming",
-    companies: ["Amazon", "Google", "Apple", "Adobe"],
+    topic: "DP",
+    companies: ["Amazon", "Google", "Apple", "TCS", "Wipro", "Infosys"],
     status: "Solved",
     mastery: 100,
     description: "You are climbing a staircase. It takes `n` steps to reach the top. Each time you can either climb 1 or 2 steps. In how many distinct ways can you climb to the top?",
@@ -609,8 +659,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     title: "Coin Change",
     difficulty: "Medium",
     category: "Algorithms & DSA",
-    topic: "Dynamic Programming",
-    companies: ["Amazon", "Microsoft", "Google", "Uber"],
+    topic: "DP",
+    companies: ["Amazon", "Microsoft", "Google", "Capgemini", "Deloitte", "IBM"],
     status: "Attempted",
     mastery: 40,
     description: "You are given an integer array `coins` representing coins of different denominations and an integer `amount` representing a total amount of money. Return the fewest number of coins that you need to make up that amount.",
@@ -646,7 +696,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Easy",
     category: "Database & SQL",
     topic: "SQL",
-    companies: ["Amazon", "Microsoft", "Oracle"],
+    companies: ["Amazon", "Microsoft", "TCS", "Accenture", "Cognizant", "Infosys"],
     status: "Solved",
     mastery: 100,
     description: "Write a solution to report the first name, last name, city, and state of each person in the `Person` table. If the address of a `personId` is not present in the `Address` table, report `null` instead.",
@@ -661,7 +711,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     optimalApproach: ["SELECT p.firstName, p.lastName, a.city, a.state FROM Person p LEFT JOIN Address a ON p.personId = a.personId;"],
     timeComplexity: "O(n + m)",
     spaceComplexity: "O(n)",
-    starterCodes: makeStarter("combineTwoTables", "", "", "", "", "", "", "", ""),
+    starterCodes: makeStarter("combineTwoTables", "", "", "", "", "", "", "", "SELECT p.firstName, p.lastName, a.city, a.state\nFROM Person p\nLEFT JOIN Address a ON p.personId = a.personId;"),
     testCases: [
       { input: "Execute Table Query", expectedOutput: "Joined Table View" }
     ],
@@ -675,7 +725,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Medium",
     category: "Database & SQL",
     topic: "SQL",
-    companies: ["Amazon", "Google", "LinkedIn", "TCS"],
+    companies: ["Amazon", "Google", "LinkedIn", "TCS", "Wipro", "Zoho"],
     status: "Solved",
     mastery: 100,
     description: "Write a solution to find the second highest salary from the `Employee` table. If there is no second highest salary, return `null`.",
@@ -687,7 +737,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     optimalApproach: ["SELECT MAX(salary) AS SecondHighestSalary FROM Employee WHERE salary < (SELECT MAX(salary) FROM Employee);"],
     timeComplexity: "O(n)",
     spaceComplexity: "O(1)",
-    starterCodes: makeStarter("secondHighestSalary", "", "", "", "", "", "", "", ""),
+    starterCodes: makeStarter("secondHighestSalary", "", "", "", "", "", "", "", "SELECT MAX(salary) AS SecondHighestSalary\nFROM Employee\nWHERE salary < (SELECT MAX(salary) FROM Employee);"),
     testCases: [
       { input: "Execute Salary Query", expectedOutput: "200" }
     ],
@@ -705,7 +755,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     difficulty: "Medium",
     category: "Core CS",
     topic: "OOP",
-    companies: ["Amazon", "Microsoft", "Google", "Bloomberg"],
+    companies: ["Amazon", "Microsoft", "Google", "Bloomberg", "Freshworks", "IBM"],
     status: "Attempted",
     mastery: 50,
     description: "Design a data structure that follows the constraints of a Least Recently Used (LRU) cache with O(1) get and put operations.",

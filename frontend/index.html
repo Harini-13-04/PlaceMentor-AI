@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title>PlaceMentor AI</title>
+  <title>PlaceMentor AI — Placement Preparation OS</title>
 
   <meta
     name="description"
-    content="PlaceMentor AI - AI Powered Career Growth Platform"
+    content="PlaceMentor AI — AI-Powered Placement Preparation Operating System"
   />
 
   <meta
@@ -19,9 +19,29 @@
   <meta property="og:title" content="PlaceMentor AI" />
   <meta
     property="og:description"
-    content="From Student to Offer Letter"
+    content="From Student to Tier-1 Offer Letter"
   />
   <meta property="og:type" content="website" />
+
+  <!-- Pre-paint Theme Script to prevent flash of unstyled theme -->
+  <script>
+    (function() {
+      try {
+        var savedTheme = localStorage.getItem('pm_theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = savedTheme ? savedTheme : (prefersDark ? 'dark' : 'dark');
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
+          document.documentElement.style.colorScheme = 'dark';
+        } else {
+          document.documentElement.classList.add('light');
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.colorScheme = 'light';
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 
 <body>

@@ -1,200 +1,153 @@
 /* ============================================================================
    PlaceMentor AI — Global Design System Tokens
-   Source of Truth for Colors, Typography, Spacing, Radius, and Components
+   Semantic Theme Tokens for Both Dark & Light Modes
 ============================================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-:root, .dark {
-  /* Dark Mode Palette — Professional High-Contrast SaaS */
-  --bg-primary: #0e1117;
-  --bg-secondary: #161a23;
-  --surface: #1b202c;
-  --surface-elevated: #222938;
-  --surface-hover: #293144;
-  --surface-active: #313b52;
-  --border-subtle: #242b3b;
-  --border: #2d364a;
-  --border-default: #3b4660;
+:root, .light {
+  /* Light Theme (Clean Crisp Modern Palette) */
+  --bg-primary: #F6F7FB;
+  --bg-secondary: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-elevated: #F1F2F7;
+  --surface-hover: #E8EAF2;
+  --surface-active: #DFE2ED;
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border: #E2E8F0;
+  --border-default: #CBD5E1;
 
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-primary: #111827;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
 
-  --accent: #14b8a6;
-  --accent-hover: #0d9488;
-  --accent-soft: rgba(20, 184, 166, 0.12);
-  --accent-border: rgba(20, 184, 166, 0.35);
+  /* Primary Purple Accent */
+  --accent: #7C3AED;
+  --accent-hover: #6D28D9;
+  --accent-soft: rgba(124, 58, 237, 0.08);
+  --accent-border: rgba(124, 58, 237, 0.25);
 
-  --accent-blue: #3b82f6;
-  --accent-blue-soft: rgba(59, 130, 246, 0.12);
-
-  /* Semantics */
-  --success: #10b981;
-  --success-soft: rgba(16, 185, 129, 0.12);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.12);
-  --error: #ef4444;
-  --error-soft: rgba(239, 68, 68, 0.12);
-  --info: #3b82f6;
-
-  /* Tailwind Bridge Tokens (HSL) */
-  --background: 222 24% 7%;
-  --foreground: 210 40% 98%;
-  --card: 222 22% 14%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222 22% 14%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 173 80% 40%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 222 20% 18%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 222 20% 18%;
-  --muted-foreground: 215 16% 55%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --ring: 173 80% 40%;
-  --radius: 0.5rem;
-
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-}
-
-.light {
-  /* Light Mode Palette — Professional Clean Technical Slate */
-  --bg-primary: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --surface-hover: #f8fafc;
-  --surface-active: #f1f5f9;
-  --border-subtle: #e2e8f0;
-  --border: #cbd5e1;
-  --border-default: #94a3b8;
-
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-
-  --accent: #0d9488;
-  --accent-hover: #0f766e;
-  --accent-soft: rgba(13, 148, 136, 0.08);
-  --accent-border: rgba(13, 148, 136, 0.3);
-
-  --accent-blue: #2563eb;
-  --accent-blue-soft: rgba(37, 99, 235, 0.08);
+  /* Secondary Accents */
+  --accent-cyan: #0891B2;
+  --accent-cyan-soft: rgba(8, 145, 178, 0.08);
+  --accent-teal: #0D9488;
 
   /* Semantics */
   --success: #059669;
-  --success-soft: rgba(5, 150, 105, 0.1);
-  --warning: #d97706;
-  --warning-soft: rgba(217, 119, 6, 0.1);
-  --error: #dc2626;
-  --error-soft: rgba(220, 38, 38, 0.1);
-  --info: #2563eb;
+  --success-soft: rgba(5, 150, 105, 0.10);
+  --warning: #D97706;
+  --warning-soft: rgba(217, 119, 6, 0.10);
+  --danger: #E11D48;
+  --danger-soft: rgba(225, 29, 72, 0.10);
+  --info: #2563EB;
 
-  /* Tailwind Bridge Tokens (HSL) */
-  --background: 210 40% 98%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
+  /* Tailwind HSL Bridge */
+  --background: 220 20% 97%;       /* #F6F7FB */
+  --foreground: 222 47% 11%;       /* #111827 */
+  --card: 0 0% 100%;               /* #FFFFFF */
   --card-foreground: 222 47% 11%;
   --popover: 0 0% 100%;
   --popover-foreground: 222 47% 11%;
-  --primary: 175 77% 26%;
+  --primary: 258 90% 58%;          /* #7C3AED */
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 40% 96.1%;
+  --secondary: 220 14% 95%;        /* #F1F2F7 */
   --secondary-foreground: 222 47% 11%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215 16% 47%;
-  --destructive: 0 84% 60%;
+  --muted: 220 14% 95%;
+  --muted-foreground: 215 16% 47%; /* #64748B */
+  --destructive: 349 89% 55%;
   --destructive-foreground: 0 0% 100%;
-  --ring: 175 77% 26%;
+  --border: 214 32% 90%;           /* #E2E8F0 */
+  --input: 214 32% 90%;
+  --ring: 258 90% 58%;
+  --radius: 0.75rem;
+
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-glow-purple: 0 4px 14px rgba(124, 58, 237, 0.20);
+  --shadow-glow-cta: 0 4px 16px rgba(124, 58, 237, 0.30);
+}
+
+.dark {
+  /* Dark Navy Theme */
+  --bg-primary: #080B11;
+  --bg-secondary: #0C101A;
+  --surface: #111625;
+  --surface-elevated: #161D2F;
+  --surface-hover: #1C253B;
+  --surface-active: #232E47;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border: #1E273D;
+  --border-default: #283452;
+
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+
+  /* Primary Purple Accent */
+  --accent: #8B5CF6;
+  --accent-hover: #7C3AED;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent-border: rgba(139, 92, 246, 0.35);
+
+  /* Secondary Accents */
+  --accent-cyan: #06B6D4;
+  --accent-cyan-soft: rgba(6, 182, 212, 0.12);
+  --accent-teal: #14B8A6;
+
+  /* Semantics */
+  --success: #10B981;
+  --success-soft: rgba(16, 185, 129, 0.14);
+  --warning: #F59E0B;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger: #F43F5E;
+  --danger-soft: rgba(244, 63, 94, 0.14);
+  --info: #3B82F6;
+
+  /* Tailwind HSL Bridge */
+  --background: 224 37% 5%;        /* #080B11 */
+  --foreground: 210 40% 98%;       /* #F8FAFC */
+  --card: 223 37% 10%;            /* #111625 */
+  --card-foreground: 210 40% 98%;
+  --popover: 223 37% 10%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 258 90% 66%;         /* #8B5CF6 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 223 35% 14%;       /* #161D2F */
+  --secondary-foreground: 210 40% 98%;
+  --muted: 223 35% 14%;
+  --muted-foreground: 215 20% 65%; /* #94A3B8 */
+  --destructive: 349 89% 60%;     /* #F43F5E */
+  --destructive-foreground: 0 0% 100%;
+  --border: 223 34% 18%;          /* #1E273D */
+  --input: 223 34% 18%;
+  --ring: 258 90% 66%;
+
+  /* Shadows */
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --shadow-glow-purple: 0 0 24px rgba(139, 92, 246, 0.35);
+  --shadow-glow-cta: 0 4px 20px rgba(124, 58, 237, 0.45);
 }
 
 /* ============================================================================
-   Global Component Standard Classes
+   Buttons & CTA Utilities
 ============================================================================ */
-
-/* Buttons */
-.pm-btn-primary {
-  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none shadow-sm;
-  background-color: var(--accent);
-  color: #ffffff;
-}
-.pm-btn-primary:hover {
-  background-color: var(--accent-hover);
+.pm-btn-gradient {
+  background: linear-gradient(135deg, #7C3AED 0%, #9333EA 50%, #4F46E5 100%);
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 16px rgba(124, 58, 237, 0.35);
+  transition: all 0.2s ease-in-out;
 }
 
-.pm-btn-secondary {
-  @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border transition-all duration-150 disabled:opacity-50 disabled:pointer-events-none;
-  background-color: var(--surface);
-  border-color: var(--border);
-  color: var(--text-primary);
-}
-.pm-btn-secondary:hover {
-  background-color: var(--surface-hover);
+.pm-btn-gradient:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
 }
 
-.pm-btn-ghost {
-  @apply inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-150 text-muted-foreground hover:text-foreground hover:bg-secondary;
-}
-
-/* Cards */
-.pm-card {
-  @apply rounded-xl border transition-all duration-150;
-  background-color: var(--surface);
-  border-color: var(--border);
-  color: var(--text-primary);
-}
-.pm-card-hover:hover {
-  background-color: var(--surface-hover);
-  border-color: var(--border-default);
-}
-
-/* Form Inputs */
-.pm-input {
-  @apply w-full px-3.5 py-2 text-xs rounded-lg border outline-none transition-all duration-150;
-  background-color: var(--surface);
-  border-color: var(--border);
-  color: var(--text-primary);
-}
-.pm-input::placeholder {
-  color: var(--text-muted);
-}
-.pm-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.pm-select {
-  @apply px-3 py-2 text-xs rounded-lg border outline-none transition-all duration-150 cursor-pointer font-medium;
-  background-color: var(--surface);
-  border-color: var(--border);
-  color: var(--text-primary);
-}
-.pm-select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-/* Badges */
-.pm-badge {
-  @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-semibold border;
-}
-
-/* Typography scale utilities */
-.pm-h1 {
-  @apply text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-sans;
-}
-.pm-h2 {
-  @apply text-xl font-bold tracking-tight text-foreground font-sans;
-}
-.pm-h3 {
-  @apply text-base font-semibold text-foreground font-sans;
-}
-.pm-body {
-  @apply text-sm text-foreground font-sans leading-relaxed;
-}
-.pm-sub {
-  @apply text-xs text-muted-foreground font-sans;
+.pm-btn-gradient:active {
+  transform: translateY(0);
 }

@@ -11,10 +11,13 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Home from "./pages/Home";
 import Practice from "./pages/Practice";
+import Aptitude from "./pages/Aptitude";
 import Communication from "./pages/Communication";
 import Resume from "./pages/Resume";
-import Profile from "./pages/Profile";
 import PlacementReadiness from "./pages/PlacementReadiness";
+import BrainZone from "./pages/BrainZone";
+import Quizee from "./pages/Quizee";
+import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -67,11 +70,11 @@ const App = () => (
                 }
               />
               <Route
-                path="/resume"
+                path="/aptitude"
                 element={
                   <ProtectedRoute>
                     <Layout>
-                      <Resume />
+                      <Aptitude />
                     </Layout>
                   </ProtectedRoute>
                 }
@@ -87,11 +90,41 @@ const App = () => (
                 }
               />
               <Route
+                path="/resume"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Resume />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/placement-readiness"
                 element={
                   <ProtectedRoute>
                     <Layout>
                       <PlacementReadiness />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/brain-zone"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <BrainZone />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/quizee"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Quizee />
                     </Layout>
                   </ProtectedRoute>
                 }
@@ -117,7 +150,8 @@ const App = () => (
                 }
               />
 
-              {/* Safe redirects for obsolete/removed routes */}
+              {/* Legacy Aliases and Redirects */}
+              <Route path="/readiness" element={<Navigate to="/placement-readiness" replace />} />
               <Route path="/copilot" element={<Navigate to="/practice" replace />} />
               <Route path="/leaderboard" element={<Navigate to="/placement-readiness" replace />} />
               <Route path="/weekly-goals" element={<Navigate to="/home" replace />} />
