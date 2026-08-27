@@ -1,37 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, status
-from app.schemas.auth import (
-    RegisterRequest,
-    LoginRequest,
-    TokenResponse,
-    UserResponse,
-    ChangePasswordRequest,
-)
-from app.services.auth_service import (
-    create_user,
-    authenticate_user,
-    change_user_password,
-)
-from app.core.jwt_handler import create_access_token
-from app.middlewares.auth_middleware import get_current_user
+from fastapi import APIRouter, HTTPException, Depends, Header
+from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+from app.services.auth_service import create_user, authenticate_user
+from app.core.security import create_access_token, decode_access_token
+from app.database.mongodb import users_collection
+from typing import Optional
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: RegisterRequest):
-    name = request.name or request.full_name or ""
-    if not name.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Name is required",
-        )
-
-    if not request.password or len(request.password) < 6:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 6 characters",
-        )
-
     user = await create_user(
         name=name,
         email=request.email,
@@ -48,19 +26,16 @@ async def register(request: RegisterRequest):
             detail="Email already registered",
         )
 
-    user_dict = user.model_dump()
-    user_dict.pop("password", None)
-    # Normalize name and full_name
-    display_name = user_dict.get("name") or user_dict.get("full_name") or ""
-    user_dict["name"] = display_name
-    user_dict["full_name"] = display_name
-
-    access_token = create_access_token(data={"sub": user.id, "email": user.email})
-
+    token = create_access_token({"sub": user.id, "email": user.email, "name": user.full_name})
     return {
-        "access_token": access_token,
+        "message": "User registered successfully",
+        "access_token": token,
         "token_type": "bearer",
-        "user": user_dict,
+        "user": {
+            "id": user.id,
+            "name": user.full_name,
+            "email": user.email,
+        }
     }
 
 
@@ -69,60 +44,44 @@ async def login(request: LoginRequest):
     user = await authenticate_user(request.email, request.password)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=401,
             detail="Invalid email or password",
-            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user.pop("password", None)
-    display_name = user.get("name") or user.get("full_name") or ""
-    user["name"] = display_name
-    user["full_name"] = display_name
-
-    access_token = create_access_token(data={"sub": user["id"], "email": user["email"]})
+    token = create_access_token({
+        "sub": user.get("id"),
+        "email": user.get("email"),
+        "name": user.get("full_name") or user.get("name", "Student")
+    })
 
     return {
-        "access_token": access_token,
+        "access_token": token,
         "token_type": "bearer",
-        "user": user,
+        "user": {
+            "id": user.get("id"),
+            "name": user.get("full_name") or user.get("name", "Student"),
+            "email": user.get("email"),
+        }
     }
 
 
+@router.get("/me")
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
 
-@router.post("/logout")
-async def logout():
-    return {"message": "Logged out successfully"}
+    token = authorization.split(" ")[1]
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Expired or invalid token")
 
+    user_id = payload.get("sub")
+    user = await users_collection.find_one({"id": user_id}, {"password": 0, "_id": 0})
+    if not user:
+        return {
+            "id": user_id,
+            "name": payload.get("name", "Student"),
+            "email": payload.get("email", ""),
+        }
 
-@router.get("/me", response_model=UserResponse)
-async def get_me(current_user: dict = Depends(get_current_user)):
-    display_name = current_user.get("name") or current_user.get("full_name") or ""
-    current_user["name"] = display_name
-    current_user["full_name"] = display_name
-    return current_user
-
-
-@router.post("/change-password")
-async def change_password(
-    request: ChangePasswordRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    if not request.new_password or len(request.new_password) < 6:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be at least 6 characters long",
-        )
-
-    success = await change_user_password(
-        user_id=current_user["id"],
-        current_password=request.current_password,
-        new_password=request.new_password,
-    )
-
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect current password",
-        )
-
-    return {"message": "Password updated successfully"}
+    return user

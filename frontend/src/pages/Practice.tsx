@@ -1,16 +1,10 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { PROBLEMS_DATASET, Problem } from "@/data/problems";
+import PracticeWorkspace from "@/components/practice/PracticeWorkspace";
 import {
   Search,
   CheckCircle2,
-  CircleDot,
-  Flame,
-  Building2,
-  Filter,
-  Sun,
-  Moon,
-  Code2,
-  Layers,
-  ChevronRight,
+  Circle,
   RotateCcw,
 } from "lucide-react";
 import {
@@ -25,210 +19,412 @@ import { PracticeWorkspace } from "@/components/practice/PracticeWorkspace";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 
-type CategoryFilter = "All" | "DSA" | "SQL" | "Core CS" | "Frequently Asked" | "Weak Areas";
+type CategoryFilter =
+  | "All"
+  | "Frequently Asked"
+  | "Recommended"
+  | "Weak Areas"
+  | "Algorithms & DSA"
+  | "Database & SQL"
+  | "Core CS"
+  | "Companies";
 
-const TOPIC_LIST = [
+const CATEGORIES: CategoryFilter[] = [
   "All",
-  "Arrays",
-  "Strings",
-  "Hashing",
-  "Two Pointers",
-  "Sliding Window",
-  "Stack",
-  "Queue",
-  "Linked List",
-  "Binary Search",
-  "Trees",
-  "Graphs",
-  "Dynamic Programming",
-  "Greedy",
-  "Backtracking",
-  "Math",
-  "SQL",
-  "DBMS",
-  "Operating Systems",
-  "Computer Networks",
-  "OOP",
+  "Frequently Asked",
+  "Recommended",
+  "Weak Areas",
+  "Algorithms & DSA",
+  "Database & SQL",
+  "Core CS",
+  "Companies",
+];
+
+const COMPANIES_LIST = [
+  "All Companies",
+  "Amazon",
+  "Google",
+  "Microsoft",
+  "Facebook",
+  "Apple",
+  "TCS",
+  "Infosys",
+  "Accenture",
+  "Adobe",
+  "Bloomberg",
 ];
 
 export default function Practice() {
-  const { user } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-
-  // Active Workspace Problem
+  const [problems, setProblems] = useState<Problem[]>(PROBLEMS_DATASET);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
 
-  // User Problem Status & Mastery Store
-  const [problemStates, setProblemStates] = useState<
-    Record<string, { status: ProblemStatus; mastery: number }>
-  >(() => {
-    return {
-      "pm-arr-001": { status: "Solved", mastery: 85 },
-      "pm-arr-002": { status: "Solved", mastery: 90 },
-      "pm-arr-003": { status: "Solved", mastery: 75 },
-      "pm-arr-004": { status: "Attempted", mastery: 45 },
-      "pm-arr-005": { status: "Solved", mastery: 80 },
-      "pm-dsa-011": { status: "Solved", mastery: 95 },
-      "pm-dsa-016": { status: "Attempted", mastery: 50 },
-      "pm-dsa-021": { status: "Solved", mastery: 80 },
-      "pm-dsa-029": { status: "Attempted", mastery: 40 },
-    };
-  });
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("All");
+  const [selectedTopic, setSelectedTopic] = useState<string>("All Topics");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("All Difficulties");
+  const [selectedCompany, setSelectedCompany] = useState<string>("All Companies");
+  const [selectedStatus, setSelectedStatus] = useState<string>("All Status");
 
-  // Filter States
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All");
-  const [selectedTopic, setSelectedTopic] = useState<string>("All");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("All");
-  const [selectedCompany, setSelectedCompany] = useState<string>("All");
-  const [selectedStatus, setSelectedStatus] = useState<string>("All");
-
-  // Dynamically compute counts for each topic from the actual dataset
+  // Dynamically calculate topic counts from the actual dataset
   const topicCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: PROBLEMS.length };
-    for (const p of PROBLEMS) {
-      for (const t of p.topics) {
-        counts[t] = (counts[t] || 0) + 1;
-      }
-      if (p.category === "SQL") {
-        counts["SQL"] = (counts["SQL"] || 0) + 1;
-      }
-      if (p.category === "Core CS") {
-        counts["Core CS"] = (counts["Core CS"] || 0) + 1;
-      }
-    }
+    const counts: Record<string, number> = {};
+    PROBLEMS_DATASET.forEach((p) => {
+      counts[p.topic] = (counts[p.topic] || 0) + 1;
+    });
     return counts;
   }, []);
 
-  // Selected Problem
-  const selectedProblem = useMemo(() => {
-    return PROBLEMS.find((p) => p.id === selectedProblemId) || null;
-  }, [selectedProblemId]);
+  const uniqueTopics = useMemo(() => {
+    return Object.keys(topicCounts).sort();
+  }, [topicCounts]);
 
-  // Update Problem Status & Mastery
-  const handleProblemStatusChange = (newStatus: "Attempted" | "Solved", newMastery: number) => {
-    if (!selectedProblemId) return;
-    setProblemStates((prev) => ({
-      ...prev,
-      [selectedProblemId]: {
-        status: newStatus,
-        mastery: newMastery,
-      },
-    }));
-  };
-
-  // Filtered Problems List
+  // Filtered problems list
   const filteredProblems = useMemo(() => {
-    return PROBLEMS.filter((p) => {
-      // 1. Category Pill Filter
-      if (categoryFilter === "DSA" && p.category !== "DSA") return false;
-      if (categoryFilter === "SQL" && p.category !== "SQL") return false;
-      if (categoryFilter === "Core CS" && p.category !== "Core CS") return false;
-      if (categoryFilter === "Frequently Asked" && !p.frequentlyAsked) return false;
-      if (categoryFilter === "Weak Areas") {
-        const state = problemStates[p.id];
-        if (!state || state.status !== "Attempted") return false;
-      }
-
-      // 2. Horizontal Topic Bar Filter
-      if (selectedTopic !== "All") {
-        const matchesTopic = p.topics.some(
-          (t) => t.toLowerCase() === selectedTopic.toLowerCase()
-        );
-        const matchesCategory =
-          (selectedTopic === "SQL" && p.category === "SQL") ||
-          (selectedTopic === "DBMS" && p.topics.includes("DBMS")) ||
-          (selectedTopic === "Operating Systems" && p.topics.includes("Operating Systems")) ||
-          (selectedTopic === "Computer Networks" && p.topics.includes("Computer Networks")) ||
-          (selectedTopic === "OOP" && p.topics.includes("OOP"));
-
-        if (!matchesTopic && !matchesCategory) return false;
-      }
-
-      // 3. Search Query
+    return problems.filter((p) => {
+      // 1. Search filter (title, topic, or companies)
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchesTitle = p.title.toLowerCase().includes(query);
-        const matchesTopic = p.topics.some((t) => t.toLowerCase().includes(query));
-        const matchesCompany = p.companies?.some((c) => c.toLowerCase().includes(query));
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = p.title.toLowerCase().includes(q);
+        const matchesTopic = p.topic.toLowerCase().includes(q);
+        const matchesCompany = p.companies.some((c) => c.toLowerCase().includes(q));
         if (!matchesTitle && !matchesTopic && !matchesCompany) return false;
       }
 
-      // 4. Difficulty
-      if (selectedDifficulty !== "All" && p.difficulty !== selectedDifficulty) return false;
+      // 2. Category filter
+      if (activeCategory === "Frequently Asked") {
+        if (p.companies.length < 3) return false;
+      } else if (activeCategory === "Recommended") {
+        if (p.difficulty === "Hard" || p.status === "Solved") return false;
+      } else if (activeCategory === "Weak Areas") {
+        if (p.status !== "Attempted") return false;
+      } else if (activeCategory === "Algorithms & DSA") {
+        if (p.category !== "Algorithms & DSA") return false;
+      } else if (activeCategory === "Database & SQL") {
+        if (p.category !== "Database & SQL") return false;
+      } else if (activeCategory === "Core CS") {
+        if (p.category !== "Core CS") return false;
+      } else if (activeCategory === "Companies") {
+        if (selectedCompany === "All Companies" && p.companies.length === 0) return false;
+      }
 
-      // 5. Company
-      if (selectedCompany !== "All" && (!p.companies || !p.companies.includes(selectedCompany)))
+      // 3. Topic filter (horizontal buttons)
+      if (selectedTopic !== "All Topics" && p.topic !== selectedTopic) {
         return false;
+      }
 
-      // 6. Status
-      if (selectedStatus !== "All") {
-        const currentStatus = problemStates[p.id]?.status || "Not Started";
-        if (currentStatus !== selectedStatus) return false;
+      // 4. Difficulty filter
+      if (selectedDifficulty !== "All Difficulties" && p.difficulty !== selectedDifficulty) {
+        return false;
+      }
+
+      // 5. Company filter
+      if (selectedCompany !== "All Companies" && !p.companies.includes(selectedCompany)) {
+        return false;
+      }
+
+      // 6. Status filter
+      if (selectedStatus !== "All Status" && p.status !== selectedStatus) {
+        return false;
       }
 
       return true;
     });
   }, [
-    categoryFilter,
-    selectedTopic,
+    problems,
     searchQuery,
+    activeCategory,
+    selectedTopic,
     selectedDifficulty,
     selectedCompany,
     selectedStatus,
-    problemStates,
   ]);
 
-  // If a problem is clicked, open the 100vw x 100vh Full-Screen IDE workspace
-  if (selectedProblem) {
-    const currentStatus = problemStates[selectedProblem.id]?.status || "Not Started";
-    const currentMastery =
-      problemStates[selectedProblem.id]?.mastery || selectedProblem.defaultMastery || 0;
+  const handleProblemSolved = (problemId: string) => {
+    setProblems((prev) =>
+      prev.map((p) =>
+        p.id === problemId ? { ...p, status: "Solved" as const, mastery: 100 } : p
+      )
+    );
+  };
 
+  const selectedProblem = problems.find((p) => p.id === selectedProblemId);
+
+  // If a problem is selected, open the 100vw x 100vh Fullscreen Workspace
+  if (selectedProblem) {
     return (
       <PracticeWorkspace
         problem={selectedProblem}
-        onBack={() => setSelectedProblemId(null)}
-        userStatus={currentStatus}
-        masteryPercentage={currentMastery}
-        onStatusChange={handleProblemStatusChange}
+        onBackToList={() => setSelectedProblemId(null)}
+        onProblemSolved={handleProblemSolved}
       />
     );
   }
 
   return (
-    <div className="space-y-4 text-foreground font-sans max-w-6xl mx-auto pb-12 animate-fade-in">
-      {/* ── 1. Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3 border-b border-border">
+    <div className="space-y-5 font-sans text-foreground">
+      {/* 1. Header & Search */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground font-sans">
-            Practice
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Practice</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Practice questions companies actually ask.
+            Practice the questions companies actually ask.
           </p>
         </div>
 
-        {/* Search & Theme Toggle */}
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-72">
-            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search questions, topics, companies..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-md bg-card border border-border text-foreground placeholder:text-muted-foreground outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-sans"
-            />
-          </div>
+        {/* Search Input */}
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search problems, topics, or companies..."
+            className="w-full pl-9 pr-3.5 py-2 rounded-lg border border-border bg-card text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all shadow-sm"
+          />
+        </div>
+      </div>
 
+      {/* 2. Horizontal Category Navigation Pills */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+        {CATEGORIES.map((cat) => (
           <button
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Light Mode" : "Dark Mode"}
-            className="p-1.5 rounded-md border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            key={cat}
+            onClick={() => {
+              setActiveCategory(cat);
+              if (cat === "All") {
+                setSelectedTopic("All Topics");
+              }
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              activeCategory === cat
+                ? "bg-teal-600 text-white shadow-sm"
+                : "border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
           >
-            {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
+            {cat}
           </button>
+        ))}
+      </div>
+
+      {/* 3. Horizontal TOPIC Navigation with Dynamic Counts (NO DROPDOWN) */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            onClick={() => setSelectedTopic("All Topics")}
+            className={`px-3 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-all border ${
+              selectedTopic === "All Topics"
+                ? "border-teal-500 bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold"
+                : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary"
+            }`}
+          >
+            All Topics ({PROBLEMS_DATASET.length})
+          </button>
+
+          {uniqueTopics.map((topicName) => (
+            <button
+              key={topicName}
+              onClick={() => setSelectedTopic(topicName)}
+              className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5 ${
+                selectedTopic === topicName
+                  ? "border-teal-500 bg-teal-500/15 text-teal-600 dark:text-teal-400 font-bold"
+                  : "border-border bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+            >
+              <span>{topicName}</span>
+              <span className="text-[10px] font-mono opacity-80">{topicCounts[topicName]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Compact Filter Bar */}
+      <div className="flex items-center justify-between flex-wrap gap-2.5 p-3 rounded-xl border border-border bg-card shadow-sm text-xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Difficulty Filter */}
+          <select
+            value={selectedDifficulty}
+            onChange={(e) => setSelectedDifficulty(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-secondary/60 text-foreground text-xs font-medium focus:outline-none focus:border-teal-500 cursor-pointer"
+          >
+            <option value="All Difficulties">All Difficulties</option>
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+
+          {/* Company Filter */}
+          <select
+            value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-secondary/60 text-foreground text-xs font-medium focus:outline-none focus:border-teal-500 cursor-pointer"
+          >
+            {COMPANIES_LIST.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          {/* Status Filter */}
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="px-2.5 py-1.5 rounded-lg border border-border bg-secondary/60 text-foreground text-xs font-medium focus:outline-none focus:border-teal-500 cursor-pointer"
+          >
+            <option value="All Status">All Status</option>
+            <option value="Solved">Solved</option>
+            <option value="Attempted">Attempted</option>
+            <option value="Not Started">Not Started</option>
+          </select>
+
+          {(selectedDifficulty !== "All Difficulties" ||
+            selectedCompany !== "All Companies" ||
+            selectedStatus !== "All Status" ||
+            selectedTopic !== "All Topics" ||
+            searchQuery.trim() !== "") && (
+            <button
+              onClick={() => {
+                setSelectedDifficulty("All Difficulties");
+                setSelectedCompany("All Companies");
+                setSelectedStatus("All Status");
+                setSelectedTopic("All Topics");
+                setSearchQuery("");
+                setActiveCategory("All");
+              }}
+              className="text-[11px] text-muted-foreground hover:text-teal-600 dark:hover:text-teal-400 flex items-center gap-1 font-medium transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" /> Reset Filters
+            </button>
+          )}
+        </div>
+
+        <div className="text-xs text-muted-foreground font-mono">
+          Showing <span className="font-bold text-foreground">{filteredProblems.length}</span> questions
+        </div>
+      </div>
+
+      {/* 5. Dense Problem List Table */}
+      <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-border bg-secondary/40 text-muted-foreground uppercase text-[11px] font-semibold tracking-wider">
+                <th className="py-3 px-4 w-12 text-center">Status</th>
+                <th className="py-3 px-4">Problem Title & Topics</th>
+                <th className="py-3 px-4 w-28">Difficulty</th>
+                <th className="py-3 px-4 hidden md:table-cell">Companies</th>
+                <th className="py-3 px-4 w-24 text-right">Mastery</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {filteredProblems.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                    <p className="text-xs font-medium">No problems match the selected filters.</p>
+                    <button
+                      onClick={() => {
+                        setSelectedDifficulty("All Difficulties");
+                        setSelectedCompany("All Companies");
+                        setSelectedStatus("All Status");
+                        setSelectedTopic("All Topics");
+                        setSearchQuery("");
+                      }}
+                      className="mt-2 text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline"
+                    >
+                      Clear all filters
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                filteredProblems.map((p, idx) => (
+                  <tr
+                    key={p.id}
+                    onClick={() => setSelectedProblemId(p.id)}
+                    className="hover:bg-secondary/40 transition-colors cursor-pointer group"
+                  >
+                    {/* Status Column */}
+                    <td className="py-3 px-4 text-center">
+                      {p.status === "Solved" ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 mx-auto" />
+                      ) : p.status === "Attempted" ? (
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mx-auto" />
+                      ) : (
+                        <Circle className="w-3.5 h-3.5 text-muted-foreground/40 mx-auto" />
+                      )}
+                    </td>
+
+                    {/* Title & Topic */}
+                    <td className="py-3 px-4">
+                      <div className="space-y-0.5">
+                        <div className="font-semibold text-foreground text-xs group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors flex items-center gap-1.5">
+                          <span>
+                            {idx + 1}. {p.title}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span className="px-1.5 py-0.2 rounded bg-secondary border border-border text-foreground font-medium">
+                            {p.topic}
+                          </span>
+                          <span className="hidden sm:inline">&bull;</span>
+                          <span className="hidden sm:inline text-muted-foreground">{p.category}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Difficulty */}
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border ${
+                          p.difficulty === "Easy"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                            : p.difficulty === "Medium"
+                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                            : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                        }`}
+                      >
+                        {p.difficulty}
+                      </span>
+                    </td>
+
+                    {/* Companies */}
+                    <td className="py-3 px-4 hidden md:table-cell">
+                      <div className="flex flex-wrap gap-1">
+                        {p.companies.slice(0, 3).map((comp) => (
+                          <span
+                            key={comp}
+                            className="px-1.5 py-0.5 rounded bg-secondary border border-border text-[10px] text-muted-foreground"
+                          >
+                            {comp}
+                          </span>
+                        ))}
+                        {p.companies.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground font-mono self-center">
+                            +{p.companies.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Mastery % */}
+                    <td className="py-3 px-4 text-right font-mono text-xs">
+                      <span
+                        className={
+                          p.mastery === 100
+                            ? "text-emerald-600 dark:text-emerald-400 font-bold"
+                            : p.mastery > 0
+                            ? "text-amber-500 font-semibold"
+                            : "text-muted-foreground"
+                        }
+                      >
+                        {p.mastery}%
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

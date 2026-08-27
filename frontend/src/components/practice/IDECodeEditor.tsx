@@ -1,450 +1,398 @@
-import React, { useState, useEffect, useRef } from "react";
-import Editor, { OnMount } from "@monaco-editor/react";
+import React, { useState, useRef } from "react";
+import Editor from "@monaco-editor/react";
+import { useTheme } from "@/context/ThemeContext";
+import { Problem } from "@/data/problems";
 import {
-  RotateCcw,
-  Copy,
-  Check,
-  Terminal,
-  Clock,
-  Cpu,
   CheckCircle2,
   XCircle,
-  ChevronDown,
+  Clock,
+  HardDrive,
   ChevronUp,
-  Code2,
+  ChevronDown,
+  RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
-import { Problem } from "@/data/problems";
-import { useTheme } from "@/context/ThemeContext";
 
-export type SupportedLanguage = "python" | "javascript" | "java" | "cpp" | "sql";
+export type SupportedLanguage =
+  | "python3"
+  | "python"
+  | "java"
+  | "java17"
+  | "sql"
+  | "numpy"
+  | "c"
+  | "cpp"
+  | "javascript";
 
-export interface TestCaseResult {
-  testCaseId: string;
-  input: string;
-  expected: string;
-  actual: string;
-  passed: boolean;
-  runtimeMs: number;
-}
+export const LANGUAGE_OPTIONS: { id: SupportedLanguage; label: string; monacoLang: string }[] = [
+  { id: "python3", label: "Python 3", monacoLang: "python" },
+  { id: "python", label: "Python", monacoLang: "python" },
+  { id: "java", label: "Java", monacoLang: "java" },
+  { id: "java17", label: "Java 17", monacoLang: "java" },
+  { id: "cpp", label: "C++", monacoLang: "cpp" },
+  { id: "c", label: "C", monacoLang: "c" },
+  { id: "javascript", label: "JavaScript", monacoLang: "javascript" },
+  { id: "sql", label: "SQL", monacoLang: "sql" },
+  { id: "numpy", label: "NumPy", monacoLang: "python" },
+];
 
-export interface RunResult {
-  passed: boolean;
+interface ExecutionResult {
+  status: "Accepted" | "Wrong Answer" | "Runtime Error" | "Compilation Error" | "Time Limit Exceeded";
+  isSubmit?: boolean;
   runtime: number; // ms
   memory: number; // MB
-  testCaseResults: TestCaseResult[];
+  passedCount: number;
+  totalCount: number;
+  visiblePassed?: number;
+  visibleTotal?: number;
+  hiddenPassed?: number;
+  hiddenTotal?: number;
+  testCaseResults: {
+    input: string;
+    expected: string;
+    actual: string;
+    passed: boolean;
+    isHidden?: boolean;
+  }[];
   consoleOutput?: string;
-  failedCaseIndex?: number;
-  submitted?: boolean;
 }
 
 interface IDECodeEditorProps {
   problem: Problem;
-  language: SupportedLanguage;
+  selectedLanguage: SupportedLanguage;
   onLanguageChange: (lang: SupportedLanguage) => void;
-  code: string;
-  setCode: (code: string) => void;
-  lastResult: RunResult | null;
   isRunning: boolean;
   isSubmitting: boolean;
-  onRun: () => void;
-  onSubmit: () => void;
-  onReset: () => void;
+  onRun: (code: string) => void;
+  onSubmit: (code: string) => void;
+  executionResult: ExecutionResult | null;
+  activeConsoleTab: "testcase" | "result" | "console";
+  setActiveConsoleTab: (tab: "testcase" | "result" | "console") => void;
 }
 
-export const IDECodeEditor: React.FC<IDECodeEditorProps> = ({
+export default function IDECodeEditor({
   problem,
-  language,
+  selectedLanguage,
   onLanguageChange,
-  code,
-  setCode,
-  lastResult,
   isRunning,
   isSubmitting,
   onRun,
   onSubmit,
-  onReset,
-}) => {
+  executionResult,
+  activeConsoleTab,
+  setActiveConsoleTab,
+}: IDECodeEditorProps) {
   const { theme } = useTheme();
-  const [activeConsoleTab, setActiveConsoleTab] = useState<"testcases" | "result" | "console">("testcases");
-  const [selectedTestCaseIdx, setSelectedTestCaseIdx] = useState<number>(0);
-  const [consoleExpanded, setConsoleExpanded] = useState<boolean>(true);
-  const [copied, setCopied] = useState<boolean>(false);
-  const [cursorPos, setCursorPos] = useState<{ line: number; col: number }>({ line: 1, col: 1 });
 
-  const editorRef = useRef<any>(null);
+  // Multi-language code state cache
+  const [codeCache, setCodeCache] = useState<Record<string, string>>({});
+  const [activeTestCaseIdx, setActiveTestCaseIdx] = useState(0);
+  const [consoleHeight, setConsoleHeight] = useState(240);
+  const [consoleCollapsed, setConsoleCollapsed] = useState(false);
+  const isDraggingRef = useRef(false);
 
-  // Switch console tab to "result" automatically when execution finishes
-  useEffect(() => {
-    if (lastResult) {
-      setActiveConsoleTab("result");
-      setConsoleExpanded(true);
-    }
-  }, [lastResult]);
+  const cacheKey = `${problem.id}_${selectedLanguage}`;
+  const currentCode = codeCache[cacheKey] ?? (problem.starterCodes as any)[selectedLanguage] ?? "";
 
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
-    editorRef.current = editor;
-
-    // Track cursor position
-    editor.onDidChangeCursorPosition((e) => {
-      setCursorPos({ line: e.position.lineNumber, col: e.position.column });
-    });
-
-    // Custom Keybindings (Ctrl+Enter to Run)
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      if (!isRunning && !isSubmitting) {
-        onRun();
-      }
-    });
-
-    // Indentation settings
-    editor.getModel()?.updateOptions({
-      tabSize: 4,
-      insertSpaces: true,
-    });
+  const handleEditorChange = (value: string | undefined) => {
+    setCodeCache((prev) => ({
+      ...prev,
+      [cacheKey]: value || "",
+    }));
   };
 
-  const getMonacoLanguage = (lang: SupportedLanguage): string => {
-    switch (lang) {
-      case "python":
-        return "python";
-      case "javascript":
-        return "javascript";
-      case "java":
-        return "java";
-      case "cpp":
-        return "cpp";
-      case "sql":
-        return "sql";
-      default:
-        return "python";
-    }
+  const handleResetCode = () => {
+    const defaultStarter = (problem.starterCodes as any)[selectedLanguage] || "";
+    setCodeCache((prev) => ({
+      ...prev,
+      [cacheKey]: defaultStarter,
+    }));
   };
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  // Vertical resize handlers for Bottom Test Console
+  const startVerticalResize = (e: React.MouseEvent) => {
+    isDraggingRef.current = true;
+    const startY = e.clientY;
+    const startHeight = consoleHeight;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const deltaY = startY - moveEvent.clientY;
+      const newHeight = Math.max(140, Math.min(500, startHeight + deltaY));
+      setConsoleHeight(newHeight);
+      setConsoleCollapsed(false);
+    };
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   };
+
+  const monacoLang =
+    LANGUAGE_OPTIONS.find((l) => l.id === selectedLanguage)?.monacoLang || "python";
 
   return (
-    <div className="flex flex-col h-full bg-background text-foreground font-sans text-sm overflow-hidden border-r border-border select-text">
-      {/* ── 1. Editor Header Toolbar (38px) ── */}
-      <div className="h-9 px-3.5 bg-card border-b border-border flex items-center justify-between flex-shrink-0 select-none">
-        <div className="flex items-center gap-3">
-          {/* Language Selector */}
+    <div className="h-full flex flex-col bg-card overflow-hidden font-sans border-r border-border">
+      {/* Editor Sub-Header / Language Selector Bar */}
+      <div className="h-10 px-3 border-b border-border bg-secondary/40 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2">
           <select
-            value={language}
+            value={selectedLanguage}
             onChange={(e) => onLanguageChange(e.target.value as SupportedLanguage)}
-            className="bg-secondary text-foreground border border-border rounded px-2.5 py-1 text-xs font-semibold outline-none focus:border-teal-500 cursor-pointer"
+            className="px-2.5 py-1 rounded-md border border-border bg-card text-foreground text-xs font-semibold focus:outline-none focus:border-teal-500 cursor-pointer"
           >
-            <option value="python">Python 3</option>
-            <option value="javascript">JavaScript (Node.js)</option>
-            <option value="java">Java 17 (OpenJDK)</option>
-            <option value="cpp">C++ 20 (GCC)</option>
-            {problem.category === "SQL" && <option value="sql">SQL (PostgreSQL)</option>}
+            {LANGUAGE_OPTIONS.map((lang) => (
+              <option key={lang.id} value={lang.id}>
+                {lang.label}
+              </option>
+            ))}
           </select>
-
-          <span className="text-[11px] font-mono text-muted-foreground hidden sm:inline">
-            Spaces: 4
-          </span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
-            onClick={copyCode}
-            title="Copy code"
-            className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-secondary transition-colors"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-teal-500" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
-
-          <button
-            onClick={onReset}
+            onClick={handleResetCode}
             title="Reset code to starter template"
-            className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-secondary transition-colors"
+            className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* ── 2. Monaco Editor Workspace Canvas ── */}
-      <div className="flex-1 relative overflow-hidden bg-background">
+      {/* Monaco Code Editor Container */}
+      <div className="flex-1 min-h-0 relative">
         <Editor
           height="100%"
-          language={getMonacoLanguage(language)}
-          value={code}
+          language={monacoLang}
+          value={currentCode}
           theme={theme === "dark" ? "vs-dark" : "vs"}
-          onChange={(value) => setCode(value || "")}
-          onMount={handleEditorDidMount}
+          onChange={handleEditorChange}
           options={{
-            fontSize: 14,
-            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
-            fontLigatures: true,
+            fontSize: 14.5,
             lineHeight: 22,
+            fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
             tabSize: 4,
             insertSpaces: true,
+            renderLineHighlight: "all",
+            bracketPairColorization: { enabled: true },
+            guides: { indentation: true, bracketPairs: true },
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
+            smoothScrolling: true,
+            padding: { top: 12, bottom: 12 },
             automaticLayout: true,
-            renderLineHighlight: "all",
-            renderWhitespace: "selection",
-            bracketPairColorization: { enabled: true },
-            autoClosingBrackets: "always",
-            autoClosingQuotes: "always",
-            formatOnType: true,
-            padding: { top: 10, bottom: 10 },
-            cursorBlinking: "smooth",
-            cursorSmoothCaretAnimation: "on",
-            overviewRulerBorder: false,
-            hideCursorInOverviewRuler: true,
-            scrollbar: {
-              vertical: "visible",
-              horizontal: "visible",
-              verticalScrollbarSize: 8,
-              horizontalScrollbarSize: 8,
-            },
           }}
         />
       </div>
 
-      {/* ── 3. Editor Status Bar (24px) ── */}
-      <div className="h-6 px-3 bg-card border-t border-border flex items-center justify-between text-[11px] font-mono text-muted-foreground select-none flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <span>Ln {cursorPos.line}, Col {cursorPos.col}</span>
-          <span>Tab Size: 4</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span>UTF-8</span>
-          <span className="capitalize">{language}</span>
-        </div>
+      {/* Vertical Drag Handle for Console */}
+      <div
+        onMouseDown={startVerticalResize}
+        className="h-1.5 bg-border hover:bg-teal-500/60 cursor-row-resize transition-colors shrink-0 flex items-center justify-center group"
+      >
+        <div className="w-12 h-0.5 rounded-full bg-muted-foreground/40 group-hover:bg-teal-400" />
       </div>
 
-      {/* ── 4. Testcase & Console Bottom Drawer ── */}
+      {/* Bottom Test & Console Drawer (Typography: 14-15px) */}
       <div
-        className={`border-t border-border bg-card flex flex-col flex-shrink-0 transition-all duration-200 ${
-          consoleExpanded ? "h-60" : "h-9"
-        }`}
+        style={{ height: consoleCollapsed ? "36px" : `${consoleHeight}px` }}
+        className="border-t border-border bg-card flex flex-col shrink-0 transition-all duration-150 relative overflow-hidden"
       >
-        {/* Console Header Bar */}
-        <div className="h-9 px-3 border-b border-border flex items-center justify-between flex-shrink-0 font-sans">
-          <div className="flex items-center gap-1">
+        {/* Drawer Tabs Header */}
+        <div className="h-9 px-3 border-b border-border bg-secondary/30 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => {
-                setActiveConsoleTab("testcases");
-                setConsoleExpanded(true);
+                setActiveConsoleTab("testcase");
+                setConsoleCollapsed(false);
               }}
-              className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors flex items-center gap-1.5 ${
-                activeConsoleTab === "testcases" && consoleExpanded
-                  ? "bg-secondary text-teal-600 dark:text-teal-400 border border-border"
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                activeConsoleTab === "testcase"
+                  ? "bg-card text-foreground border border-border shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <span>Testcase</span>
+              Testcase
             </button>
-
             <button
               onClick={() => {
                 setActiveConsoleTab("result");
-                setConsoleExpanded(true);
+                setConsoleCollapsed(false);
               }}
-              className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors flex items-center gap-1.5 ${
-                activeConsoleTab === "result" && consoleExpanded
-                  ? "bg-secondary text-teal-600 dark:text-teal-400 border border-border"
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                activeConsoleTab === "result"
+                  ? "bg-card text-foreground border border-border shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <span>Test Result</span>
-              {lastResult && (
+              Test Result
+              {executionResult && (
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    lastResult.passed ? "bg-emerald-500" : "bg-rose-500"
+                    executionResult.status === "Accepted" ? "bg-emerald-500" : "bg-rose-500"
                   }`}
                 />
               )}
             </button>
-
             <button
               onClick={() => {
                 setActiveConsoleTab("console");
-                setConsoleExpanded(true);
+                setConsoleCollapsed(false);
               }}
-              className={`px-2.5 py-1 text-xs font-semibold rounded transition-colors flex items-center gap-1.5 ${
-                activeConsoleTab === "console" && consoleExpanded
-                  ? "bg-secondary text-teal-600 dark:text-teal-400 border border-border"
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                activeConsoleTab === "console"
+                  ? "bg-card text-foreground border border-border shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Terminal className="w-3.5 h-3.5" />
-              <span>Console</span>
+              Console
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            {lastResult && consoleExpanded && (
-              <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-muted-foreground" />
-                  {lastResult.runtime} ms
-                </span>
-                <span className="flex items-center gap-1">
-                  <Cpu className="w-3 h-3 text-muted-foreground" />
-                  {lastResult.memory} MB
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded text-xs font-bold font-sans ${
-                    lastResult.passed
-                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                      : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                  }`}
-                >
-                  {lastResult.submitted
-                    ? lastResult.passed
-                      ? "Accepted"
-                      : "Wrong Answer"
-                    : lastResult.passed
-                    ? "Passed"
-                    : "Failed"}
-                </span>
-              </div>
-            )}
-
-            <button
-              onClick={() => setConsoleExpanded(!consoleExpanded)}
-              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-secondary transition-colors"
-            >
-              {consoleExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
-            </button>
-          </div>
+          <button
+            onClick={() => setConsoleCollapsed(!consoleCollapsed)}
+            className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
+          >
+            {consoleCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
         </div>
 
-        {/* Console Content */}
-        {consoleExpanded && (
-          <div className="flex-1 overflow-y-auto p-3.5 font-mono text-[13px] bg-background">
-            {activeConsoleTab === "testcases" && (
-              <div className="space-y-3 font-sans">
-                {/* Case Pills */}
-                <div className="flex items-center gap-1.5">
-                  {problem.testCases.map((tc, idx) => {
-                    const tcRes = lastResult?.testCaseResults[idx];
-                    return (
-                      <button
-                        key={tc.id}
-                        onClick={() => setSelectedTestCaseIdx(idx)}
-                        className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors flex items-center gap-1.5 ${
-                          selectedTestCaseIdx === idx
-                            ? "bg-secondary text-foreground border border-border"
-                            : "text-muted-foreground hover:text-foreground border border-transparent"
-                        }`}
-                      >
-                        {tcRes && (
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              tcRes.passed ? "bg-emerald-500" : "bg-rose-500"
-                            }`}
-                          />
-                        )}
-                        Case {idx + 1}
-                      </button>
-                    );
-                  })}
+        {/* Drawer Body Content */}
+        {!consoleCollapsed && (
+          <div className="flex-1 overflow-y-auto p-4 text-[14px] sm:text-[15px] font-mono leading-relaxed">
+            {/* Tab: Testcase */}
+            {activeConsoleTab === "testcase" && (
+              <div className="space-y-3.5">
+                <div className="flex items-center gap-2">
+                  {problem.testCases.map((tc, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveTestCaseIdx(idx)}
+                      className={`px-3 py-1 rounded-md text-xs font-semibold transition-colors ${
+                        activeTestCaseIdx === idx
+                          ? "bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30 font-bold"
+                          : "bg-secondary text-muted-foreground hover:text-foreground border border-border"
+                      }`}
+                    >
+                      Case {idx + 1}
+                    </button>
+                  ))}
                 </div>
 
-                {/* Selected Case Parameters */}
-                {problem.testCases[selectedTestCaseIdx] && (
-                  <div className="space-y-2 font-mono text-xs">
-                    <div>
-                      <div className="text-[11px] font-sans text-muted-foreground mb-1 font-semibold">Input:</div>
-                      <div className="p-2 rounded bg-card border border-border text-foreground">
-                        {problem.testCases[selectedTestCaseIdx].input}
-                      </div>
-                    </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold text-muted-foreground font-sans uppercase tracking-wider">Input</p>
+                  <pre className="p-3 rounded-lg border border-border bg-secondary/40 text-foreground overflow-x-auto text-[14px]">
+                    {problem.testCases[activeTestCaseIdx]?.input}
+                  </pre>
+                </div>
 
-                    <div>
-                      <div className="text-[11px] font-sans text-muted-foreground mb-1 font-semibold">Expected Output:</div>
-                      <div className="p-2 rounded bg-card border border-border text-foreground">
-                        {problem.testCases[selectedTestCaseIdx].expectedOutput}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold text-muted-foreground font-sans uppercase tracking-wider">Expected Output</p>
+                  <pre className="p-3 rounded-lg border border-border bg-secondary/40 text-foreground overflow-x-auto text-[14px]">
+                    {problem.testCases[activeTestCaseIdx]?.expectedOutput}
+                  </pre>
+                </div>
               </div>
             )}
 
+            {/* Tab: Test Result */}
             {activeConsoleTab === "result" && (
-              <div className="space-y-3 font-sans">
-                {lastResult ? (
-                  <div>
-                    <div className="flex items-center gap-2 mb-2.5">
-                      <span
-                        className={`text-sm font-bold flex items-center gap-1.5 ${
-                          lastResult.passed ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
-                        }`}
-                      >
-                        {lastResult.passed ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-rose-500" />
-                        )}
-                        {lastResult.submitted
-                          ? lastResult.passed
-                            ? "Accepted"
-                            : "Wrong Answer"
-                          : lastResult.passed
-                          ? "Test Cases Passed"
-                          : "Test Case Failed"}
-                      </span>
-                      <span className="text-xs font-mono text-muted-foreground">
-                        ({lastResult.runtime} ms · {lastResult.memory} MB)
-                      </span>
-                    </div>
-
-                    {lastResult.testCaseResults[selectedTestCaseIdx] && (
-                      <div className="space-y-2 font-mono text-xs">
-                        <div>
-                          <div className="text-[11px] font-sans text-muted-foreground mb-1 font-semibold">Input:</div>
-                          <div className="p-2 rounded bg-card border border-border text-foreground">
-                            {lastResult.testCaseResults[selectedTestCaseIdx].input}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <div className="text-[11px] font-sans text-muted-foreground mb-1 font-semibold">Expected Output:</div>
-                            <div className="p-2 rounded bg-card border border-border text-foreground">
-                              {lastResult.testCaseResults[selectedTestCaseIdx].expected}
-                            </div>
-                          </div>
-
-                          <div>
-                            <div className="text-[11px] font-sans text-muted-foreground mb-1 font-semibold">Your Output:</div>
-                            <div
-                              className={`p-2 rounded border ${
-                                lastResult.testCaseResults[selectedTestCaseIdx].passed
-                                  ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
-                                  : "bg-rose-500/10 border-rose-500/40 text-rose-700 dark:text-rose-300"
-                              }`}
-                            >
-                              {lastResult.testCaseResults[selectedTestCaseIdx].actual}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+              <div>
+                {!executionResult ? (
+                  <div className="py-8 text-center text-muted-foreground font-sans">
+                    <p className="text-sm">Click "Run" or "Submit" to evaluate code against test cases.</p>
                   </div>
                 ) : (
-                  <div className="text-muted-foreground text-xs py-4 text-center">
-                    Click "Run" or "Submit" to view execution results.
+                  <div className="space-y-3.5 font-sans">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5">
+                        {executionResult.status === "Accepted" ? (
+                          <span className="px-3 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-sm font-bold flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4" /> Accepted
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-md bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-sm font-bold flex items-center gap-1.5">
+                            <XCircle className="w-4 h-4" /> {executionResult.status}
+                          </span>
+                        )}
+
+                        <span className="text-xs text-muted-foreground font-mono">
+                          {executionResult.passedCount} / {executionResult.totalCount} testcases passed
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3.5 text-xs text-muted-foreground font-mono">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-teal-500" /> Runtime: {executionResult.runtime} ms
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <HardDrive className="w-3.5 h-3.5 text-blue-500" /> Memory: {executionResult.memory} MB
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Hidden test summary if submitted */}
+                    {executionResult.isSubmit && (
+                      <div className="p-3 rounded-lg border border-teal-500/20 bg-teal-500/5 flex items-center justify-between text-xs font-mono">
+                        <div className="flex items-center gap-2 text-teal-600 dark:text-teal-400 font-semibold">
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Hidden Test Suite Evaluation</span>
+                        </div>
+                        <span className="text-muted-foreground">
+                          {executionResult.hiddenPassed} / {executionResult.hiddenTotal} hidden cases passed
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Visible Test Case Cards (14-15px content) */}
+                    <div className="space-y-2.5 pt-1">
+                      {executionResult.testCaseResults.map((tc, idx) => (
+                        <div
+                          key={idx}
+                          className={`p-3.5 rounded-xl border text-[14px] font-mono space-y-1.5 ${
+                            tc.passed ? "border-border bg-secondary/30" : "border-rose-500/30 bg-rose-500/5"
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-foreground font-sans text-xs">Case {idx + 1}</span>
+                            <span className={`text-xs font-bold ${tc.passed ? "text-emerald-500" : "text-rose-500"}`}>
+                              {tc.passed ? "Passed" : "Wrong Answer"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-xs uppercase font-sans">Input: </span>
+                            <span className="text-foreground">{tc.input}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-xs uppercase font-sans">Output: </span>
+                            <span className={tc.passed ? "text-teal-600 dark:text-teal-400 font-bold" : "text-rose-500 font-bold"}>
+                              {tc.actual}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-xs uppercase font-sans">Expected: </span>
+                            <span className="text-foreground">{tc.expected}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
             )}
 
+            {/* Tab: Console */}
             {activeConsoleTab === "console" && (
-              <div>
-                <pre className="text-foreground whitespace-pre-wrap font-mono text-xs">
-                  {lastResult?.consoleOutput ||
-                    "> Ready. Output from execution and test evaluation will appear here."}
+              <div className="space-y-2 font-mono">
+                <p className="text-xs font-bold text-muted-foreground font-sans uppercase tracking-wider">Standard Output</p>
+                <pre className="p-3 rounded-lg border border-border bg-secondary/40 text-foreground overflow-x-auto leading-relaxed text-[14px]">
+                  {executionResult?.consoleOutput || "No stdout logged during execution."}
                 </pre>
               </div>
             )}
@@ -453,4 +401,4 @@ export const IDECodeEditor: React.FC<IDECodeEditorProps> = ({
       </div>
     </div>
   );
-};
+}

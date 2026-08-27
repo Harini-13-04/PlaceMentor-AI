@@ -1,228 +1,156 @@
-import React, { useState } from "react";
-import { Target, Building2, Sparkles, CheckCircle2, TrendingUp } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useState } from "react";
+import { Progress } from "@/components/ui/progress";
+import {
+  BarChart3,
+  CheckCircle2,
+  AlertTriangle,
+  Code2,
+  FileText,
+  MessageSquare,
+  Sparkles,
+  TrendingUp,
+  Target,
+  ArrowRight,
+} from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function PlacementReadiness() {
   const { user } = useAuth();
   const studentName = user?.name || user?.full_name || "Student";
   const [readinessPercentage] = useState(78);
 
-  const skillsData = [
-    { name: "Data Structures & Algorithms", percentage: 88, color: "#14B8A6" },
-    { name: "System Design", percentage: 62, color: "#F59E0B" },
-    { name: "OOP & Design Patterns", percentage: 91, color: "#10B981" },
-    { name: "Databases & SQL", percentage: 75, color: "#3B82F6" },
-    { name: "Operating Systems", percentage: 58, color: "#F59E0B" },
-    { name: "Networking", percentage: 42, color: "#EF4444" },
-    { name: "HR & Behavioral Round", percentage: 83, color: "#14B8A6" },
+  const competencyBreakdown = [
+    {
+      category: "Data Structures & Algorithms",
+      score: 88,
+      status: "Tier-1 Ready",
+      color: "text-emerald-600 dark:text-emerald-400",
+      progressClass: "[&>div]:bg-emerald-500",
+      details: "Solid mastery in Arrays, Two Pointers, Binary Search, and Trees.",
+    },
+    {
+      category: "Core Computer Science",
+      score: 72,
+      status: "Moderate",
+      color: "text-blue-600 dark:text-blue-400",
+      progressClass: "[&>div]:bg-blue-500",
+      details: "Strong in DBMS and SQL; Computer Networks fundamentals need review.",
+    },
+    {
+      category: "ATS Resume & Experience Quality",
+      score: 84,
+      status: "Strong",
+      color: "text-purple-600 dark:text-purple-400",
+      progressClass: "[&>div]:bg-purple-500",
+      details: "Clear quantified impact and recognized tech stack keywords.",
+    },
+    {
+      category: "Interview Communication & HR",
+      score: 80,
+      status: "Ready",
+      color: "text-teal-600 dark:text-teal-400",
+      progressClass: "[&>div]:bg-teal-600",
+      details: "Good confidence and vocal cadence; practice concluding behavioral responses.",
+    },
   ];
 
-  const readinessAreas = [
-    { label: "DSA, OOP, HR (High Readiness)", color: "bg-emerald-500" },
-    { label: "System Design, Databases (Moderate)", color: "bg-amber-500" },
-    { label: "Networking, OS (Focus Area)", color: "bg-rose-500" },
+  const focusRecommendations = [
+    {
+      title: "Computer Networks & Protocols",
+      action: "Review TCP/IP handshake, DNS resolution, and HTTP/HTTPS differences.",
+      module: "/practice",
+      type: "Core CS",
+    },
+    {
+      title: "Dynamic Programming Patterns",
+      action: "Solve 5 high-yield 0/1 Knapsack and LCS questions.",
+      module: "/practice",
+      type: "Algorithms",
+    },
+    {
+      title: "Behavioral STAR Stories",
+      action: "Record a 60-second response on handling project conflict.",
+      module: "/communication",
+      type: "Voice",
+    },
   ];
-
-  const CircularProgress = ({ percentage }: { percentage: number }) => {
-    const radius = 45;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (percentage / 100) * circumference;
-
-    return (
-      <svg width="120" height="120" style={{ transform: "rotate(-90deg)" }}>
-        <circle
-          cx="60"
-          cy="60"
-          r={radius}
-          fill="none"
-          stroke="currentColor"
-          className="text-secondary"
-          strokeWidth="8"
-        />
-
-        <circle
-          cx="60"
-          cy="60"
-          r={radius}
-          fill="none"
-          stroke="#14B8A6"
-          strokeWidth="8"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-        />
-
-        <text
-          x="60"
-          y="65"
-          textAnchor="middle"
-          fontSize="24"
-          fontWeight="bold"
-          fill="currentColor"
-          className="text-foreground font-sans"
-          style={{
-            transform: "rotate(90deg)",
-            transformOrigin: "60px 65px",
-          }}
-        >
-          {percentage}%
-        </text>
-      </svg>
-    );
-  };
 
   return (
     <div className="space-y-6 font-sans text-foreground">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-border">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400 mb-1">
-            <Target className="w-4 h-4" />
-            <span>Placement Readiness Index</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            {studentName}'s Career Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Real-time competency assessment across core computer science and interview domains.
-          </p>
-        </div>
-
-        <div className="px-5 py-2.5 rounded-xl border border-border bg-card shadow-sm flex items-center gap-3 self-start sm:self-auto">
-          <div>
-            <div className="text-[11px] font-semibold text-muted-foreground uppercase">Readiness Score</div>
-            <div className="text-2xl font-bold text-teal-600 dark:text-teal-400 font-mono">{readinessPercentage}%</div>
-          </div>
-        </div>
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-1">
+          Placement Readiness Diagnostic
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Comprehensive competency benchmarking across algorithmic problem-solving, core CS, resume quality, and voice communication.
+        </p>
       </div>
 
-      {/* Top Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Skills Breakdown */}
-        <div className="p-6 rounded-xl border border-border bg-card shadow-sm space-y-5">
-          <div className="flex justify-between items-center pb-2 border-b border-border">
-            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-teal-500" />
-              <span>Technical Skills Breakdown</span>
+      {/* Main Score Hero Card */}
+      <div className="p-6 sm:p-8 rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 text-center sm:text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-400 text-xs font-semibold">
+              <Sparkles className="w-3.5 h-3.5" /> Placement Benchmark 2026
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground">
+              Candidate Placement Index: <span className="text-teal-600 dark:text-teal-400 font-mono">{readinessPercentage}%</span>
             </h2>
-            <span className="text-xs font-medium px-2 py-0.5 rounded bg-secondary text-muted-foreground">
-              {skillsData.length} Evaluated Domains
-            </span>
+            <p className="text-xs sm:text-sm text-muted-foreground max-w-lg leading-relaxed">
+              Based on your completed assessments, problem submissions, and resume scan, you meet the screening threshold for 85% of campus recruitment drives.
+            </p>
           </div>
 
-          <div className="space-y-4">
-            {skillsData.map((skill) => (
-              <div key={skill.name} className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium text-foreground">{skill.name}</span>
-                  <span className="font-bold font-mono text-foreground">{skill.percentage}%</span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className="h-1.5 rounded-full transition-all duration-300"
-                    style={{
-                      width: `${skill.percentage}%`,
-                      backgroundColor: skill.color,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Circular Readiness Gauge */}
-        <div className="p-6 rounded-xl border border-border bg-card shadow-sm flex flex-col items-center justify-between">
-          <div className="w-full flex justify-between items-center pb-2 border-b border-border">
-            <h2 className="text-base font-bold text-foreground">Interview Readiness Score</h2>
-            <span className="text-xs font-semibold text-teal-600 dark:text-teal-400">Target: Top Tier</span>
-          </div>
-
-          <div className="py-6 flex flex-col items-center">
-            <CircularProgress percentage={readinessPercentage} />
-            <p className="mt-3 text-xs text-muted-foreground font-medium">Ready for on-campus & off-campus drives</p>
-          </div>
-
-          <div className="w-full space-y-2 pt-4 border-t border-border text-xs">
-            {readinessAreas.map((item) => (
-              <div key={item.label} className="flex items-center gap-2.5">
-                <div className={`w-2 h-2 rounded-full ${item.color} flex-shrink-0`} />
-                <span className="text-muted-foreground font-medium">{item.label}</span>
-              </div>
-            ))}
+          <div className="w-32 h-32 rounded-full border-4 border-teal-500/20 flex flex-col items-center justify-center bg-teal-500/10 shrink-0">
+            <span className="text-3xl font-bold text-teal-600 dark:text-teal-400 font-mono">{readinessPercentage}%</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wide font-semibold">Readiness</span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Company Readiness */}
-        <div className="p-6 rounded-xl border border-border bg-card shadow-sm space-y-5">
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2 pb-2 border-b border-border">
-            <Building2 className="w-4 h-4 text-teal-500" />
-            <span>Target Company Benchmarks</span>
-          </h2>
-
-          <div className="space-y-3.5">
-            {[
-              { company: "Amazon", score: 81, color: "bg-teal-500" },
-              { company: "Microsoft", score: 76, color: "bg-teal-600" },
-              { company: "Google", score: 72, color: "bg-amber-500" },
-              { company: "TCS (Digital / Prime)", score: 99, color: "bg-emerald-500" },
-              { company: "Infosys (Specialist Programmer)", score: 95, color: "bg-emerald-500" },
-              { company: "Cognizant", score: 92, color: "bg-emerald-500" },
-            ].map((item) => (
-              <div key={item.company} className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="font-medium text-foreground">{item.company}</span>
-                  <span className="font-bold font-mono text-foreground">{item.score}%</span>
-                </div>
-                <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
-                  <div
-                    className={`${item.color} h-1.5 rounded-full transition-all duration-300`}
-                    style={{ width: `${item.score}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+      {/* Category Breakdown Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {competencyBreakdown.map((item) => (
+          <div key={item.category} className="p-5 rounded-xl border border-border bg-card shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-foreground">{item.category}</span>
+              <span className={`text-xs font-semibold ${item.color}`}>{item.status} ({item.score}%)</span>
+            </div>
+            <Progress value={item.score} className={`h-1.5 bg-secondary rounded-full ${item.progressClass}`} />
+            <p className="text-xs text-muted-foreground leading-relaxed">{item.details}</p>
           </div>
+        ))}
+      </div>
+
+      {/* Actionable Next Steps to Reach 90%+ */}
+      <div className="p-6 rounded-2xl border border-border bg-card shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <Target className="w-4 h-4 text-teal-600 dark:text-teal-400" /> Action Items to Reach 90%+ Readiness
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">Focusing on these 3 items will close your primary placement skill gaps.</p>
         </div>
 
-        {/* AI Recommendations */}
-        <div className="p-6 rounded-xl border border-border bg-card shadow-sm space-y-4">
-          <h2 className="text-base font-bold text-foreground flex items-center gap-2 pb-2 border-b border-border">
-            <Sparkles className="w-4 h-4 text-teal-500" />
-            <span>Placement Action Items</span>
-          </h2>
-
-          <div className="space-y-3">
-            {[
-              {
-                title: "Practice Dynamic Programming & Trees",
-                description: "Solve 5 medium DP and Binary Tree problems to reach 85%+ on product company benchmarks.",
-              },
-              {
-                title: "Revise Computer Networks (OSI & TCP/IP)",
-                description: "Review transport layer protocols and socket programming concepts.",
-              },
-              {
-                title: "Conduct Mock Technical Interview",
-                description: "Practice explaining time and space complexity clearly under 20-minute timed scenarios.",
-              },
-              {
-                title: "Boost Resume ATS Score",
-                description: "Add quantifiable impact metrics to your top 2 backend/frontend projects.",
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="p-3.5 rounded-lg border border-border bg-secondary/30 hover:bg-secondary/60 transition-colors space-y-1"
-              >
-                <h3 className="text-xs font-bold text-foreground">{item.title}</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">{item.description}</p>
+        <div className="space-y-3">
+          {focusRecommendations.map((rec, i) => (
+            <div key={i} className="p-3.5 rounded-lg border border-border bg-secondary/30 flex items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-foreground">{rec.title}</span>
+                  <span className="px-2 py-0.2 rounded bg-secondary border border-border text-[10px] text-muted-foreground font-medium">{rec.type}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{rec.action}</p>
               </div>
-            ))}
-          </div>
+
+              <Link
+                to={rec.module}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors shrink-0"
+              >
+                Practice <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          ))}
         </div>
       </div>
     </div>

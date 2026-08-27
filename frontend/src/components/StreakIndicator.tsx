@@ -27,62 +27,47 @@ function StreakIndicator({ streak }: { streak: Streak }) {
   }, []);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative font-sans" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label={`Current streak: ${streak.currentStreak} days`}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-500/10 border border-orange-500/20 hover:border-orange-500/40 hover:bg-orange-500/15 transition-all duration-200"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border hover:bg-secondary transition-colors"
       >
-        <Flame className="w-4 h-4 text-orange-500" />
-        <span className="text-sm font-semibold text-white">
+        <Flame className="w-4 h-4 text-amber-500 fill-amber-500/20" />
+        <span className="text-xs font-semibold text-foreground font-mono">
           {streak.currentStreak}
         </span>
       </button>
 
-      {/* z-[999] ensures the popover floats above every card/section/modal */}
-      <div
-        className={`absolute right-0 mt-2 w-72 z-[999] transition-all duration-200 origin-top-right ${
-          open
-            ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
-            : "opacity-0 scale-95 -translate-y-1 pointer-events-none"
-        }`}
-      >
-        {/* Ambient glow sits behind the card, outside its edges */}
-        <div
-          className="pointer-events-none absolute -inset-4 rounded-[28px] opacity-70 blur-2xl"
-          style={{
-            background:
-              "radial-gradient(60% 60% at 20% 10%, rgba(168,85,247,0.35), transparent 70%), radial-gradient(55% 55% at 90% 90%, rgba(249,115,22,0.35), transparent 70%)",
-          }}
-        />
-
-        <div className="relative rounded-2xl p-5 backdrop-blur-2xl bg-[#0b0d14]/95 border border-white/15 shadow-[0_25px_100px_rgba(0,0,0,0.75),0_0_0_1px_rgba(255,255,255,0.04)]">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center shrink-0">
-              <Flame className="w-6 h-6 text-orange-500" />
+      {/* Popover */}
+      {open && (
+        <div className="absolute right-0 mt-2 w-72 rounded-xl border border-border bg-card shadow-lg p-4 z-50 animate-fade-in text-foreground">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+              <Flame className="w-5 h-5 text-amber-500 fill-amber-500/20" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Current Streak</p>
+              <p className="text-xs text-muted-foreground">Placement Practice Streak</p>
               <div className="flex items-baseline gap-1">
-                <p className="text-2xl font-display font-bold text-white">
+                <p className="text-xl font-bold text-foreground font-mono">
                   {streak.currentStreak}
                 </p>
-                <span className="text-sm text-muted-foreground">days</span>
+                <span className="text-xs text-muted-foreground">days</span>
               </div>
             </div>
           </div>
 
-          <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-2">
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
             Weekly Activity
           </p>
-          <div className="flex justify-between gap-1.5 mb-4">
+          <div className="flex justify-between gap-1 mb-3">
             {streak.weekActivity.map((active, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5">
+              <div key={i} className="flex flex-col items-center gap-1">
                 <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                  className={`w-7 h-7 rounded-md flex items-center justify-center text-xs transition-colors border ${
                     active
-                      ? "bg-orange-500/20 text-orange-500"
-                      : "bg-white/5 text-muted-foreground/40"
+                      ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                      : "bg-secondary text-muted-foreground border-border"
                   }`}
                 >
                   <Flame className="w-3.5 h-3.5" />
@@ -94,22 +79,23 @@ function StreakIndicator({ streak }: { streak: Streak }) {
             ))}
           </div>
 
-          <div className="space-y-1.5 pt-3 border-t border-white/[0.06]">
+          <div className="space-y-1 pt-2.5 border-t border-border text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Best streak</span>
-              <span className="text-xs font-medium text-white">
+              <span className="text-muted-foreground">Best streak</span>
+              <span className="font-semibold text-foreground font-mono">
                 {streak.bestStreak} days
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               {daysToMilestone > 0
                 ? `${daysToMilestone} more day${daysToMilestone === 1 ? "" : "s"} to your ${streak.milestone}-day milestone.`
                 : `You've reached the ${streak.milestone}-day milestone!`}
             </p>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
 export default StreakIndicator;

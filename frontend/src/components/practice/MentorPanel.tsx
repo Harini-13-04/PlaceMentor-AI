@@ -1,175 +1,146 @@
-import React, { useState } from "react";
-import { Sparkles, Lightbulb, Compass, Clock, HelpCircle, ChevronDown, ChevronUp, AlertCircle, CheckCircle2, ChevronRight, X } from "lucide-react";
+import { useState } from "react";
 import { Problem } from "@/data/problems";
+import {
+  Lightbulb,
+  CheckCircle2,
+  Clock,
+  HardDrive,
+  AlertCircle,
+  X,
+  Sparkles,
+  ChevronDown,
+  ChevronRight,
+  RotateCcw,
+} from "lucide-react";
 
-interface PrepGuideProps {
+interface MentorPanelProps {
   problem: Problem;
-  lastRunResult?: {
-    passed: boolean;
-    runtime: number;
-    failedCaseIndex?: number;
-    userOutput?: string;
-    expectedOutput?: string;
-  } | null;
-  onClose?: () => void;
+  onClose: () => void;
+  lastRunFailed?: boolean;
+  failureMessage?: string;
 }
 
-export const MentorPanel: React.FC<PrepGuideProps> = ({ problem, lastRunResult, onClose }) => {
-  const [hintLevel, setHintLevel] = useState<number>(0);
-  const [showApproach, setShowApproach] = useState<boolean>(false);
-  const [showComplexity, setShowComplexity] = useState<boolean>(false);
-  const [showFailureAnalysis, setShowFailureAnalysis] = useState<boolean>(false);
+export default function MentorPanel({
+  problem,
+  onClose,
+  lastRunFailed = false,
+  failureMessage,
+}: MentorPanelProps) {
+  const [unlockedHints, setUnlockedHints] = useState<number>(1);
+  const [approachOpen, setApproachOpen] = useState(false);
+  const [complexityOpen, setComplexityOpen] = useState(false);
 
-  const handleNextHint = () => {
-    if (hintLevel < problem.hints.length) {
-      setHintLevel((prev) => prev + 1);
+  const unlockNextHint = () => {
+    if (unlockedHints < problem.hints.length) {
+      setUnlockedHints((prev) => prev + 1);
     }
   };
 
-  const handleResetGuidance = () => {
-    setHintLevel(0);
-    setShowApproach(false);
-    setShowComplexity(false);
-    setShowFailureAnalysis(false);
+  const resetHints = () => {
+    setUnlockedHints(1);
   };
 
   return (
-    <div className="flex flex-col h-full bg-card text-foreground border-l border-border overflow-hidden font-sans select-text">
+    <div className="h-full flex flex-col bg-card border-l border-border text-foreground font-sans select-none">
       {/* Header */}
-      <div className="h-10 px-3.5 border-b border-border bg-card flex items-center justify-between flex-shrink-0">
+      <div className="h-12 px-4 border-b border-border flex items-center justify-between shrink-0 bg-secondary/30">
         <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-teal-500/15 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+          <div className="w-6 h-6 rounded-md bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-600 dark:text-teal-400">
             <Sparkles className="w-3.5 h-3.5" />
           </div>
-          <span className="text-xs font-bold text-foreground tracking-wide uppercase">Prep Guide</span>
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">Prep Guide</h2>
+            <p className="text-[10px] text-muted-foreground">Contextual interview guidance</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          {(hintLevel > 0 || showApproach || showComplexity || showFailureAnalysis) && (
-            <button
-              onClick={handleResetGuidance}
-              className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-0.5 rounded hover:bg-secondary transition-colors"
-            >
-              Reset
-            </button>
-          )}
-
-          {onClose && (
-            <button
-              onClick={onClose}
-              title="Close Prep Guide"
-              className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-secondary transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close Prep Guide"
+          className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
-      {/* Main Guidance Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-3.5 space-y-3 text-xs">
-        {/* Intro Banner */}
-        <div className="p-3 rounded-lg bg-teal-500/[0.08] border border-teal-500/25 text-teal-800 dark:text-teal-200 leading-relaxed text-[11px]">
-          <span className="font-semibold text-teal-700 dark:text-teal-300">Contextual Guidance:</span> Stuck? Use progressive hints to explore the optimal pattern independently before viewing the full approach.
-        </div>
-
-        {/* Test Run Diagnostic Alert if failed */}
-        {lastRunResult && !lastRunResult.passed && (
-          <div className="p-3 rounded-lg bg-amber-500/[0.1] border border-amber-500/30 text-amber-900 dark:text-amber-200 space-y-1.5 animate-fade-in">
-            <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-300 text-xs">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>Test Failure Diagnostic</span>
+      {/* Content Body with 14-15px Typography & 22-24px Line-Height */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 text-[14px] sm:text-[15px] leading-relaxed">
+        {/* Test Failure Diagnostic Guidance (if failed) */}
+        {lastRunFailed && (
+          <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 space-y-2 animate-fade-in">
+            <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 text-xs font-bold uppercase tracking-wider">
+              <AlertCircle className="w-4 h-4" />
+              <span>Test Failure Guidance</span>
             </div>
-            <p className="text-[11px] text-amber-800 dark:text-amber-200/90 leading-normal">
-              Test Case {(lastRunResult.failedCaseIndex ?? 0) + 1} did not match. Check edge conditions, index boundaries, or off-by-one errors.
+            <p className="text-[14px] text-foreground leading-normal">
+              {failureMessage || "Check edge cases like empty arrays, single-element inputs, or integer overflow limits."}
             </p>
-            <button
-              onClick={() => setShowFailureAnalysis(!showFailureAnalysis)}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 hover:underline pt-0.5"
-            >
-              {showFailureAnalysis ? "Hide diagnostic tip" : "View diagnostic tips"}
-              {showFailureAnalysis ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-            {showFailureAnalysis && (
-              <div className="p-2.5 rounded bg-card border border-border text-[11px] mt-1 space-y-1 text-foreground font-mono">
-                <p>• Verify loop termination boundaries (e.g. `n` vs `n-1`).</p>
-                <p>• Check if your state map resets between executions.</p>
-                <p>• Test with empty array, duplicate elements, or negative numbers.</p>
-              </div>
-            )}
           </div>
         )}
 
         {/* Progressive Hints Section */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-            <span>Progressive Hints</span>
-            <span className="font-mono">{hintLevel} / {problem.hints.length}</span>
+        <div className="p-4 rounded-xl border border-border bg-card space-y-3.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground uppercase tracking-wider">
+              <Lightbulb className="w-4 h-4 text-amber-500" />
+              <span>Progressive Hints</span>
+            </div>
+            <span className="text-xs font-mono text-muted-foreground">
+              {unlockedHints} of {problem.hints.length}
+            </span>
           </div>
 
-          {problem.hints.map((hint, idx) => {
-            const isUnlocked = idx < hintLevel;
-            return (
+          <div className="space-y-2.5">
+            {problem.hints.slice(0, unlockedHints).map((hint, idx) => (
               <div
                 key={idx}
-                className={`p-2.5 rounded-lg border transition-all duration-200 ${
-                  isUnlocked
-                    ? "bg-secondary/70 border-border text-foreground"
-                    : "bg-card border-dashed border-border/70 text-muted-foreground/60"
-                }`}
+                className="p-3 rounded-lg border border-border bg-secondary/50 space-y-1.5 animate-fade-in"
               >
-                <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                  <span className="flex items-center gap-1.5">
-                    {isUnlocked ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    ) : (
-                      <HelpCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                    )}
-                    Hint {idx + 1}
-                  </span>
-                  {!isUnlocked && idx === hintLevel && (
-                    <span className="text-[10px] text-teal-600 dark:text-teal-400 font-bold uppercase">Next</span>
-                  )}
+                <div className="flex items-center justify-between text-xs font-semibold text-teal-600 dark:text-teal-400">
+                  <span>Hint {idx + 1}</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
                 </div>
-                {isUnlocked ? (
-                  <p className="text-xs text-foreground leading-relaxed mt-1">{hint}</p>
-                ) : (
-                  <p className="text-[11px] italic text-muted-foreground/50">Click below to unlock nudge...</p>
-                )}
+                <p className="text-[14px] sm:text-[15px] text-foreground leading-relaxed">{hint}</p>
               </div>
-            );
-          })}
+            ))}
+          </div>
 
-          {hintLevel < problem.hints.length && (
-            <button
-              onClick={handleNextHint}
-              className="w-full py-1.5 px-3 rounded-md bg-teal-500/15 hover:bg-teal-500/25 text-teal-700 dark:text-teal-300 border border-teal-500/40 text-xs font-semibold transition-all flex items-center justify-center gap-1.5"
-            >
-              <Lightbulb className="w-3.5 h-3.5 text-teal-500" />
-              {hintLevel === 0 ? "Unlock Hint 1" : `Unlock Hint ${hintLevel + 1}`}
-            </button>
-          )}
+          <div className="pt-1">
+            {unlockedHints < problem.hints.length ? (
+              <button
+                onClick={unlockNextHint}
+                className="w-full py-2 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <Lightbulb className="w-3.5 h-3.5" /> Unlock Hint {unlockedHints + 1}
+              </button>
+            ) : (
+              <button
+                onClick={resetHints}
+                className="w-full py-1.5 px-3 rounded-lg border border-border bg-secondary hover:bg-secondary/80 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset Hints
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Optimal Approach Collapsible */}
-        <div className="border border-border rounded-lg overflow-hidden bg-card">
+        {/* Optimal Approach Section */}
+        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
           <button
-            onClick={() => setShowApproach(!showApproach)}
-            className="w-full p-2.5 flex items-center justify-between text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+            onClick={() => setApproachOpen(!approachOpen)}
+            className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-foreground hover:bg-secondary/50 transition-colors uppercase tracking-wider"
           >
-            <div className="flex items-center gap-2">
-              <Compass className="w-4 h-4 text-teal-500" />
-              <span>Optimal Approach</span>
-            </div>
-            {showApproach ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+            <span className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400" /> Optimal Approach
+            </span>
+            {approachOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
           </button>
 
-          {showApproach && (
-            <div className="p-3 border-t border-border bg-secondary/30 space-y-2 text-xs text-foreground">
-              <p className="font-bold text-teal-700 dark:text-teal-300">{problem.approach.summary}</p>
-              <ol className="list-decimal pl-4 space-y-1.5 text-muted-foreground text-[12px]">
-                {problem.approach.steps.map((step, sIdx) => (
-                  <li key={sIdx} className="leading-relaxed">
+          {approachOpen && (
+            <div className="p-4 pt-1 border-t border-border/50 space-y-2.5 text-[14px] sm:text-[15px]">
+              <ol className="space-y-2 list-decimal list-inside text-muted-foreground leading-relaxed">
+                {problem.optimalApproach.map((step, idx) => (
+                  <li key={idx}>
                     <span className="text-foreground">{step}</span>
                   </li>
                 ))}
@@ -178,38 +149,37 @@ export const MentorPanel: React.FC<PrepGuideProps> = ({ problem, lastRunResult, 
           )}
         </div>
 
-        {/* Complexity Analysis Collapsible */}
-        <div className="border border-border rounded-lg overflow-hidden bg-card">
+        {/* Time & Space Complexity */}
+        <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
           <button
-            onClick={() => setShowComplexity(!showComplexity)}
-            className="w-full p-2.5 flex items-center justify-between text-xs font-semibold text-foreground hover:bg-secondary transition-colors"
+            onClick={() => setComplexityOpen(!complexityOpen)}
+            className="w-full px-4 py-3 flex items-center justify-between text-xs font-bold text-foreground hover:bg-secondary/50 transition-colors uppercase tracking-wider"
           >
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-teal-500" />
-              <span>Time & Space Complexity</span>
-            </div>
-            {showComplexity ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+            <span className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-blue-500" /> Complexity Analysis
+            </span>
+            {complexityOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
           </button>
 
-          {showComplexity && (
-            <div className="p-3 border-t border-border bg-secondary/30 space-y-2 text-xs">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="p-2 rounded bg-card border border-border">
-                  <div className="text-[10px] text-muted-foreground uppercase font-bold">Time</div>
-                  <div className="font-mono text-xs font-bold text-teal-600 dark:text-teal-400">{problem.complexity.time}</div>
+          {complexityOpen && (
+            <div className="p-4 pt-1 border-t border-border/50 space-y-3 text-[14px] sm:text-[15px]">
+              <div className="p-3 rounded-lg border border-border bg-secondary/40 space-y-1">
+                <div className="flex items-center gap-1 text-xs font-semibold text-foreground uppercase">
+                  <Clock className="w-3.5 h-3.5 text-teal-500" /> Time Complexity
                 </div>
-                <div className="p-2 rounded bg-card border border-border">
-                  <div className="text-[10px] text-muted-foreground uppercase font-bold">Space</div>
-                  <div className="font-mono text-xs font-bold text-teal-600 dark:text-teal-400">{problem.complexity.space}</div>
-                </div>
+                <p className="text-[14px] text-muted-foreground font-mono">{problem.timeComplexity}</p>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed pt-1">
-                {problem.complexity.analysis}
-              </p>
+
+              <div className="p-3 rounded-lg border border-border bg-secondary/40 space-y-1">
+                <div className="flex items-center gap-1 text-xs font-semibold text-foreground uppercase">
+                  <HardDrive className="w-3.5 h-3.5 text-blue-500" /> Space Complexity
+                </div>
+                <p className="text-[14px] text-muted-foreground font-mono">{problem.spaceComplexity}</p>
+              </div>
             </div>
           )}
         </div>
       </div>
     </div>
   );
-};
+}
