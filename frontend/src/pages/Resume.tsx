@@ -1,273 +1,297 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Progress } from "@/components/ui/progress";
 import {
-  Sparkles,
-  UploadCloud,
-  RefreshCw,
-  Trash2,
   FileText,
-  Wand2,
+  UploadCloud,
   CheckCircle2,
-  Lock,
+  AlertTriangle,
+  RefreshCw,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  FileCheck,
+  Check,
+  Zap,
+  Trash2,
+  Download,
 } from "lucide-react";
 
-/* ─────────────────────────────────────────────────────────
-   Resume — upload + glowing Analyze CTA + loading sequence
-   ───────────────────────────────────────────────────────── */
-
 const LOADING_STEPS = [
-  "Reading Resume...",
-  "Finding Skills...",
-  "Checking Projects...",
-  "Preparing Career Scan...",
+  "Parsing Document Structure...",
+  "Extracting Technical Skills & Frameworks...",
+  "Benchmarking Against ATS Filtering Rules...",
+  "Calculating Recruiter Impact & Action Verbs...",
+  "Generating Section-by-Section Recommendations...",
 ];
 
-const Resume = () => {
-  const navigate = useNavigate();
+export default function Resume() {
   const [file, setFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [hasAnalyzed, setHasAnalyzed] = useState(true); // default view shows sample report
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) {
+      setFile(f);
+      startAnalysis();
+    }
+  };
+
+  const startAnalysis = () => {
+    setAnalyzing(true);
+    setStepIndex(0);
+  };
 
   useEffect(() => {
     if (!analyzing) return;
-    setStepIndex(0);
-    const stepTimer = setInterval(() => {
-      setStepIndex((i) => Math.min(i + 1, LOADING_STEPS.length - 1));
-    }, 600);
-    const doneTimer = setTimeout(() => {
-      navigate("/resume-analysis");
-    }, 2600);
-    return () => {
-      clearInterval(stepTimer);
-      clearTimeout(doneTimer);
-    };
-  }, [analyzing, navigate]);
+    const interval = setInterval(() => {
+      setStepIndex((i) => {
+        if (i < LOADING_STEPS.length - 1) {
+          return i + 1;
+        }
+        clearInterval(interval);
+        setTimeout(() => {
+          setAnalyzing(false);
+          setHasAnalyzed(true);
+        }, 600);
+        return i;
+      });
+    }, 700);
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (f) setFile(f);
-  }
+    return () => clearInterval(interval);
+  }, [analyzing]);
 
-  if (analyzing) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-6">
-        <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0d14]/95 backdrop-blur-2xl p-10 text-center overflow-hidden shadow-[0_25px_100px_rgba(0,0,0,0.7)]">
-          <div
-            className="pointer-events-none absolute -inset-10 opacity-60 blur-3xl"
-            style={{
-              background:
-                "radial-gradient(50% 50% at 30% 20%, rgba(139,92,246,0.35), transparent 70%), radial-gradient(50% 50% at 80% 80%, rgba(59,130,246,0.3), transparent 70%)",
-            }}
-          />
-          <div className="relative flex flex-col items-center gap-6">
-            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600/30 to-blue-600/30 border border-white/10 animate-pulse">
-              <Wand2 className="h-9 w-9 text-purple-300" />
-            </div>
-            <div className="space-y-1.5">
-              <p className="text-lg font-semibold text-white">🪄 Mentor is analyzing...</p>
-              <p className="text-sm text-muted-foreground">{LOADING_STEPS[stepIndex]}</p>
-            </div>
-            <div className="flex gap-1.5">
-              {LOADING_STEPS.map((_, i) => (
-                <div
-                  key={i}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i <= stepIndex ? "w-8 bg-gradient-to-r from-purple-500 to-blue-500" : "w-4 bg-white/10"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const resumeMetrics = {
+    overallScore: 84,
+    atsScore: 88,
+    impactScore: 79,
+    brevityScore: 85,
+    fileName: file?.name || "Harini_Muthuvel_SDE_Resume.pdf",
+    fileSize: "142 KB",
+    lastScanned: "Today, 11:30 AM",
+  };
 
-  return (
-    <div className="min-h-screen px-6 py-16 flex items-center justify-center">
-      <div className="w-full max-w-xl">
-        <div className="text-center mb-8 space-y-3">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-1.5 text-xs font-medium text-purple-300">
-            <Sparkles className="h-3.5 w-3.5" /> Level Up Your Career
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white">Resume Upload</h1>
-        </div>
-
-        <div className="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-8 md:p-10 overflow-hidden">
-          <div
-            className="pointer-events-none absolute -inset-10 opacity-50 blur-3xl"
-            style={{
-              background:
-                "radial-gradient(45% 45% at 20% 10%, rgba(139,92,246,0.3), transparent 70%), radial-gradient(45% 45% at 90% 90%, rgba(59,130,246,0.25), transparent 70%)",
-            }}
-          />
-
-          <div className="relative flex flex-col gap-6">
-            {!file ? (
-              <label className="group relative flex flex-col items-center gap-4 rounded-2xl border border-dashed border-white/20 bg-white/[0.03] p-12 text-center cursor-pointer transition-all duration-300 hover:border-purple-500/50 hover:bg-white/[0.06]">
-                <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleFileSelect} />
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-white/10 transition-transform duration-300 group-hover:scale-105">
-                  <UploadCloud className="h-7 w-7 text-purple-300" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-base font-semibold text-white">Upload Resume</p>
-                  <p className="text-xs text-muted-foreground">PDF or DOCX, up to 5MB</p>
-                </div>
-              </label>
-            ) : (
-              <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-600/20 to-blue-600/20 border border-white/10">
-                  <FileText className="h-5 w-5 text-purple-300" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-white">{file.name}</p>
-                  <p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                </div>
-                <CheckCircle2 className="h-5 w-5 text-emerald-400 flex-shrink-0" />
-              </div>
-            )}
-
-            {file && (
-              <div className="flex gap-3">
-                <label className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-center text-sm font-medium text-white/80 transition-all duration-200 hover:bg-white/[0.08] hover:text-white">
-                  <input type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleFileSelect} />
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    <RefreshCw className="h-3.5 w-3.5" /> Replace
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="flex-1 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-300 transition-all duration-200 hover:bg-red-500/20"
-                >
-                  <span className="inline-flex items-center justify-center gap-1.5">
-                    <Trash2 className="h-3.5 w-3.5" /> Remove
-                  </span>
-                </button>
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={!file}
-              onClick={() => setAnalyzing(true)}
-              className="relative rounded-2xl bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4 text-base font-semibold text-white shadow-[0_0_30px_-6px_rgba(139,92,246,0.6)] transition-all duration-200 hover:from-purple-500 hover:to-blue-500 hover:shadow-[0_0_40px_-6px_rgba(139,92,246,0.8)] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
-            >
-              ✨ Analyze Resume
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default Resume;
-
-/* ─────────────────────────────────────────────────────────
-   ResumeAnalysis — the new /resume-analysis page
-   Only six sections, per spec. Register the route as:
-     <Route path="/resume-analysis" element={<ResumeAnalysis />} />
-   ───────────────────────────────────────────────────────── */
-
-export const ResumeAnalysis = () => {
-  const unlocked = [
-    { name: "Java", level: "🟢" },
-    { name: "SQL", level: "🟢" },
-    { name: "Spring Boot", level: "🟡" },
+  const keyStrengths = [
+    "Strong technical keyword coverage for Python, React, and SQL",
+    "Quantified metrics present in 3 out of 4 project descriptions",
+    "Clean single-column ATS-friendly typographic hierarchy",
   ];
-  const locked = ["DSA", "REST API", "OOP"];
+
+  const improvements = [
+    {
+      section: "Experience / Projects",
+      issue: "Replace passive verbs ('was involved in', 'helped with') with strong action verbs ('Architected', 'Implemented', 'Optimized').",
+      impact: "+4 ATS points",
+    },
+    {
+      section: "Skills Section",
+      issue: "Group skills into clear subcategories (Languages, Frameworks, Databases, Tools) for faster recruiter parsing.",
+      impact: "+3 ATS points",
+    },
+    {
+      section: "Education",
+      issue: "Include relevant coursework (DSA, DBMS, OS, Computer Networks) matching SDE job descriptions.",
+      impact: "+2 ATS points",
+    },
+  ];
+
+  const detectedSkills = [
+    "Python", "JavaScript", "TypeScript", "React", "Node.js", "Express",
+    "MongoDB", "PostgreSQL", "REST APIs", "Git", "Docker", "Algorithms & DSA"
+  ];
 
   return (
-    <div className="min-h-screen px-6 py-16 flex justify-center">
-      <div className="w-full max-w-xl flex flex-col gap-6">
-        {/* 1. Career Power */}
-        <div className="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-10 text-center overflow-hidden">
-          <div
-            className="pointer-events-none absolute -inset-10 opacity-60 blur-3xl"
-            style={{
-              background:
-                "radial-gradient(50% 50% at 25% 15%, rgba(139,92,246,0.35), transparent 70%), radial-gradient(50% 50% at 85% 85%, rgba(59,130,246,0.3), transparent 70%)",
-            }}
-          />
-          <div className="relative flex flex-col items-center gap-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Career Power</p>
-            <p className="text-6xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-              82%
-            </p>
-            <div className="inline-flex items-center rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-1.5 text-xs font-semibold text-purple-300">
-              Level 8
-            </div>
-          </div>
-        </div>
-
-        {/* 2. AI Summary */}
-        <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-7">
-          <p className="text-sm leading-relaxed text-white/80">
-            Your resume has a solid foundation. Improve DSA and project impact to increase your placement readiness.
-          </p>
-        </div>
-
-        {/* 3 & 4. Skills Unlocked / Skills to Unlock */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-6 flex flex-col gap-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills Unlocked</p>
-            <div className="flex flex-col gap-2.5">
-              {unlocked.map((s) => (
-                <div
-                  key={s.name}
-                  className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5"
-                >
-                  <span>{s.level}</span>
-                  <span className="text-sm font-medium text-white">{s.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-6 flex flex-col gap-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Skills to Unlock</p>
-            <div className="flex flex-col gap-2.5">
-              {locked.map((name) => (
-                <div
-                  key={name}
-                  className="flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/[0.02] px-4 py-2.5 opacity-50"
-                >
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="text-sm font-medium text-white/60">{name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 5. Next Mission */}
-        <div className="relative rounded-3xl border border-white/10 bg-white/5 backdrop-blur-2xl p-7 overflow-hidden">
-          <div
-            className="pointer-events-none absolute -inset-10 opacity-40 blur-3xl"
-            style={{ background: "radial-gradient(45% 45% at 90% 10%, rgba(139,92,246,0.3), transparent 70%)" }}
-          />
-          <div className="relative flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-                Next Mission
-              </p>
-              <p className="text-lg font-semibold text-white">Complete Arrays</p>
-            </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <span className="text-xs font-bold text-purple-300">+250 XP</span>
-              <span className="text-xs font-bold text-amber-300">+40 Coins</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 6. Mentor Insight */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-6 py-4">
-          <p className="text-sm text-white/70">
-            🪄 Focus on one improvement at a time. You're closer than you think.
-          </p>
-        </div>
+    <div className="space-y-6 font-sans text-foreground">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mb-1">ATS Resume Studio</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Upload and optimize your resume against actual tech industry ATS algorithms and recruiter screening patterns.
+        </p>
       </div>
+
+      {/* Analysis In-Progress State */}
+      {analyzing ? (
+        <div className="p-12 rounded-2xl border border-border bg-card shadow-sm text-center max-w-lg mx-auto space-y-6">
+          <div className="w-16 h-16 rounded-full bg-teal-500/10 border border-teal-500/30 flex items-center justify-center mx-auto animate-pulse">
+            <RefreshCw className="w-8 h-8 text-teal-600 dark:text-teal-400 animate-spin" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-foreground">Analyzing Your Resume</h2>
+            <p className="text-xs text-muted-foreground font-mono">{LOADING_STEPS[stepIndex]}</p>
+          </div>
+
+          <Progress value={((stepIndex + 1) / LOADING_STEPS.length) * 100} className="h-2 bg-secondary [&>div]:bg-teal-600 rounded-full" />
+        </div>
+      ) : (
+        <>
+          {/* Upload Dropzone */}
+          <div className="p-8 rounded-2xl border-2 border-dashed border-border bg-card hover:border-teal-500/50 hover:bg-secondary/20 transition-all text-center relative overflow-hidden">
+            <input
+              type="file"
+              accept=".pdf,.docx"
+              onChange={handleFileSelect}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <div className="max-w-md mx-auto space-y-3 pointer-events-none">
+              <div className="w-12 h-12 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center mx-auto text-teal-600 dark:text-teal-400">
+                <UploadCloud className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Click to upload or drag & drop resume</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Supports PDF or DOCX format (Max 10 MB)</p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary border border-border text-[11px] font-semibold text-foreground">
+                <ShieldCheck className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" /> Private & Secure ATS Scan
+              </span>
+            </div>
+          </div>
+
+          {/* Diagnostic Report (if analyzed) */}
+          {hasAnalyzed && (
+            <div className="space-y-6">
+              {/* Score KPIs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Overall Resume Score</span>
+                    <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-foreground font-mono">{resumeMetrics.overallScore}</span>
+                    <span className="text-xs text-muted-foreground">/ 100</span>
+                  </div>
+                  <Progress value={resumeMetrics.overallScore} className="h-1.5 bg-secondary [&>div]:bg-teal-600 rounded-full" />
+                </div>
+
+                <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">ATS Compatibility</span>
+                    <FileCheck className="w-4 h-4 text-emerald-500" />
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-foreground font-mono">{resumeMetrics.atsScore}%</span>
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">High Match</span>
+                  </div>
+                  <Progress value={resumeMetrics.atsScore} className="h-1.5 bg-secondary [&>div]:bg-emerald-500 rounded-full" />
+                </div>
+
+                <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Quantified Impact</span>
+                    <Zap className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-foreground font-mono">{resumeMetrics.impactScore}%</span>
+                    <span className="text-xs text-muted-foreground">Metrics present</span>
+                  </div>
+                  <Progress value={resumeMetrics.impactScore} className="h-1.5 bg-secondary [&>div]:bg-blue-500 rounded-full" />
+                </div>
+
+                <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Brevity & Formatting</span>
+                    <FileText className="w-4 h-4 text-purple-500" />
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-foreground font-mono">{resumeMetrics.brevityScore}%</span>
+                    <span className="text-xs text-muted-foreground">1 Page format</span>
+                  </div>
+                  <Progress value={resumeMetrics.brevityScore} className="h-1.5 bg-secondary [&>div]:bg-purple-500 rounded-full" />
+                </div>
+              </div>
+
+              {/* Actionable Recommendations & Skills Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left: Recommended Fixes */}
+                <div className="lg:col-span-8 space-y-4">
+                  <div className="p-5 rounded-xl border border-border bg-card space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-500" /> High-Priority Improvements
+                      </h3>
+                      <span className="text-xs text-muted-foreground">{improvements.length} items to address</span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {improvements.map((item, i) => (
+                        <div key={i} className="p-3.5 rounded-lg border border-border bg-secondary/30 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-foreground">{item.section}</span>
+                            <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded">
+                              {item.impact}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-relaxed">{item.issue}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Strengths */}
+                  <div className="p-5 rounded-xl border border-border bg-card space-y-3">
+                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Key Strengths
+                    </h3>
+                    <ul className="space-y-2">
+                      {keyStrengths.map((str, i) => (
+                        <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                          <span>{str}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Right: Detected Keywords & Metadata */}
+                <div className="lg:col-span-4 space-y-4">
+                  <div className="p-5 rounded-xl border border-border bg-card space-y-3.5">
+                    <div>
+                      <h3 className="text-xs font-bold text-foreground">Scanned Document</h3>
+                      <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{resumeMetrics.fileName}</p>
+                    </div>
+
+                    <div className="text-xs space-y-1.5 pt-2 border-t border-border">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>File size</span>
+                        <span className="font-mono text-foreground">{resumeMetrics.fileSize}</span>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Last scanned</span>
+                        <span className="text-foreground">{resumeMetrics.lastScanned}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={startAnalysis}
+                      className="w-full py-2 px-3 rounded-lg border border-border bg-secondary hover:bg-secondary/80 text-xs font-semibold text-foreground transition-colors flex items-center justify-center gap-2 mt-2"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Re-scan Resume
+                    </button>
+                  </div>
+
+                  <div className="p-5 rounded-xl border border-border bg-card space-y-3">
+                    <h3 className="text-xs font-bold text-foreground">Detected Technical Keywords</h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detectedSkills.map((sk) => (
+                        <span
+                          key={sk}
+                          className="px-2 py-0.5 rounded-md bg-secondary border border-border text-[11px] font-medium text-foreground"
+                        >
+                          {sk}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
-};
+}
