@@ -26,13 +26,7 @@ const LOADING_STEPS = [
 
 export default function Resume() {
   const [file, setFile] = useState<File | null>(null);
-  const [fileInputKey, setFileInputKey] = useState(0);
-  const [resumeText, setResumeText] = useState("");
-  const [extracting, setExtracting] = useState(false);
-  const [extractionError, setExtractionError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [resumeAnalyzed, setResumeAnalyzed] = useState(false);
-  const [resumeAnalysis, setResumeAnalysis] = useState<ReturnType<typeof analyzeResume> | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
   const [hasAnalyzed, setHasAnalyzed] = useState(true); // default view shows sample report
 

@@ -33,15 +33,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: "Settings", path: "/settings", icon: Settings },
   ];
 
-  const displayName = user?.name || user?.full_name || "Student";
-  const userInitials = displayName
-    .split(" ")
-    .filter(Boolean)
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "U";
-
   return (
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans selection:bg-teal-500/20 selection:text-teal-400">
       {/* 1. Global Leftmost Sidebar (Collapsible: 240px when open, 64px when collapsed) */}

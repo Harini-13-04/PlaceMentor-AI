@@ -15,8 +15,6 @@ import {
 import { Link } from "react-router-dom";
 
 export default function PlacementReadiness() {
-  const { user } = useAuth();
-  const studentName = user?.name || user?.full_name || "Student";
   const [readinessPercentage] = useState(78);
 
   const competencyBreakdown = [
