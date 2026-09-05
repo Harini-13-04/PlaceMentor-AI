@@ -2,10 +2,14 @@ import asyncio
 import uuid
 from starlette.testclient import TestClient
 from server import app
-from app.database.mongodb import users_collection
+from motor.motor_asyncio import AsyncIOMotorClient
+from app.core.config import MONGO_URL, DB_NAME
 
 async def cleanup(email: str):
-    await users_collection.delete_one({"email": email})
+    c = AsyncIOMotorClient(MONGO_URL)
+    db = c[DB_NAME]
+    await db.users.delete_one({"email": email})
+    c.close()
 
 def run_tests():
     # Setup test user credentials
@@ -121,7 +125,8 @@ def run_tests():
 
     # Clean up test user from DB
     asyncio.run(cleanup(test_email))
-    print("\nALL 8 ENDPOINTS TESTED & PASSED SUCCESSFULLY! 🚀")
+    print("\nALL 8 ENDPOINTS TESTED & PASSED SUCCESSFULLY! [SUCCESS]")
 
 if __name__ == "__main__":
+
     run_tests()

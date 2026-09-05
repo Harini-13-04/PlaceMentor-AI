@@ -19,6 +19,9 @@ import BrainZone from "./pages/BrainZone";
 import Quizee from "./pages/Quizee";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
+import Leaderboard from "./pages/Leaderboard";
+import WeeklyGoals from "./pages/WeeklyGoals";
+import Achievements from "./pages/Achievements";
 import NotFound from "./pages/NotFound";
 
 export { API_URL } from "./config";
@@ -61,6 +64,16 @@ const App = () => (
               />
               <Route
                 path="/practice"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Practice />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/practice/:problemId"
                 element={
                   <ProtectedRoute>
                     <Layout>
@@ -130,6 +143,36 @@ const App = () => (
                 }
               />
               <Route
+                path="/leaderboard"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Leaderboard />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/weekly-goals"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <WeeklyGoals />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/achievements"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Achievements />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/profile"
                 element={
                   <ProtectedRoute>
@@ -153,9 +196,6 @@ const App = () => (
               {/* Legacy Aliases and Redirects */}
               <Route path="/readiness" element={<Navigate to="/placement-readiness" replace />} />
               <Route path="/copilot" element={<Navigate to="/practice" replace />} />
-              <Route path="/leaderboard" element={<Navigate to="/placement-readiness" replace />} />
-              <Route path="/weekly-goals" element={<Navigate to="/home" replace />} />
-              <Route path="/achievements" element={<Navigate to="/placement-readiness" replace />} />
 
               {/* 404 Catch-All */}
               <Route path="*" element={<NotFound />} />

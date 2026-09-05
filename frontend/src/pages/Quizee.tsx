@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+
 import {
   QUIZ_CATEGORIES,
   QUIZ_QUESTIONS,
@@ -49,9 +50,38 @@ export default function Quizee() {
     strongTopics: string[];
   } | null>(null);
 
+  const handleSubmitQuiz = useCallback(() => {
+    setIsTimerRunning(false);
+
+    let correct = 0;
+    const weak: string[] = [];
+    const strong: string[] = [];
+
+    activeQuestions.forEach((q, idx) => {
+      if (userAnswers[idx] === q.correctIndex) {
+        correct++;
+        if (!strong.includes(q.topic)) strong.push(q.topic);
+      } else {
+        if (!weak.includes(q.topic)) weak.push(q.topic);
+      }
+    });
+
+    const accuracy = Math.round((correct / (activeQuestions.length || 1)) * 100);
+
+    setQuizResult({
+      score: correct,
+      total: activeQuestions.length,
+      accuracy,
+      weakTopics: weak.length > 0 ? weak : ["None! Exemplary CS fundamentals mastery."],
+      strongTopics: strong.length > 0 ? strong : ["Basic CS Knowledge"],
+    });
+
+    setViewMode("result");
+  }, [activeQuestions, userAnswers]);
+
   // Countdown timer
   useEffect(() => {
-    let interval: any;
+    let interval: NodeJS.Timeout | number;
     if (isTimerRunning && timeRemaining > 0) {
       interval = setInterval(() => {
         setTimeRemaining((t) => {
@@ -65,7 +95,7 @@ export default function Quizee() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isTimerRunning, timeRemaining]);
+  }, [isTimerRunning, timeRemaining, handleSubmitQuiz]);
 
   // Mode 1: Quick 5-Minute Quiz
   const handleStartQuickQuiz = () => {
@@ -118,36 +148,7 @@ export default function Quizee() {
     }));
   };
 
-  const handleSubmitQuiz = () => {
-    setIsTimerRunning(false);
-
-    let correct = 0;
-    const weak: string[] = [];
-    const strong: string[] = [];
-
-    activeQuestions.forEach((q, idx) => {
-      if (userAnswers[idx] === q.correctIndex) {
-        correct++;
-        if (!strong.includes(q.topic)) strong.push(q.topic);
-      } else {
-        if (!weak.includes(q.topic)) weak.push(q.topic);
-      }
-    });
-
-    const accuracy = Math.round((correct / activeQuestions.length) * 100);
-
-    setQuizResult({
-      score: correct,
-      total: activeQuestions.length,
-      accuracy,
-      weakTopics: weak.length > 0 ? weak : ["None! Exemplary CS fundamentals mastery."],
-      strongTopics: strong.length > 0 ? strong : ["Basic CS Knowledge"],
-    });
-
-    setViewMode("result");
-  };
-
-  const categoryIcons: Record<QuizCategory, any> = {
+  const categoryIcons: Record<QuizCategory, React.ComponentType<{ className?: string }>> = {
     "CS Fundamentals": Cpu,
     "DBMS": Database,
     "Operating Systems": Layers,
@@ -157,6 +158,7 @@ export default function Quizee() {
     "HR & Interview": Users,
     "General Placement": BookOpen,
   };
+
 
   return (
     <div className="space-y-6 font-sans text-foreground">

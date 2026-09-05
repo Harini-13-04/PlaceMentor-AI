@@ -1,6 +1,17 @@
-import React, { useState, useRef, useEffect } from "react";
-import Editor, { OnMount } from "@monaco-editor/react";
-import { useTheme } from "@/context/ThemeContext";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { python } from "@codemirror/lang-python";
+import { javascript } from "@codemirror/lang-javascript";
+import { java } from "@codemirror/lang-java";
+import { cpp } from "@codemirror/lang-cpp";
+import { sql } from "@codemirror/lang-sql";
+import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { defaultKeymap, historyKeymap, history, indentWithTab } from "@codemirror/commands";
+import { bracketMatching, foldGutter, foldKeymap, indentOnInput, HighlightStyle, syntaxHighlighting, indentUnit } from "@codemirror/language";
+import { lineNumbers, highlightActiveLineGutter, highlightActiveLine, keymap, EditorView, drawSelection, dropCursor } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+import { tags as t } from "@lezer/highlight";
+
 import { Problem } from "@/data/problems";
 import {
   CheckCircle2,
@@ -9,9 +20,13 @@ import {
   HardDrive,
   ChevronUp,
   ChevronDown,
-  RotateCcw,
   ShieldCheck,
+  AlertTriangle,
+  Copy,
   Check,
+  Maximize2,
+  Minimize2,
+  Terminal,
 } from "lucide-react";
 
 export type SupportedLanguage =
@@ -25,21 +40,22 @@ export type SupportedLanguage =
   | "cpp"
   | "javascript";
 
-export const LANGUAGE_OPTIONS: { id: SupportedLanguage; label: string; monacoLang: string }[] = [
-  { id: "python3", label: "Python 3", monacoLang: "python" },
-  { id: "python", label: "Python", monacoLang: "python" },
-  { id: "java", label: "Java", monacoLang: "java" },
-  { id: "java17", label: "Java 17", monacoLang: "java" },
-  { id: "cpp", label: "C++", monacoLang: "cpp" },
-  { id: "c", label: "C", monacoLang: "c" },
-  { id: "javascript", label: "JavaScript", monacoLang: "javascript" },
-  { id: "sql", label: "SQL", monacoLang: "sql" },
-  { id: "numpy", label: "NumPy", monacoLang: "python" },
+const ALL_LANGUAGE_OPTIONS: { id: SupportedLanguage; label: string; tag: string }[] = [
+  { id: "python3", label: "Python 3", tag: "PY" },
+  { id: "python", label: "Python", tag: "PY" },
+  { id: "java", label: "Java", tag: "JAVA" },
+  { id: "java17", label: "Java 17", tag: "JAVA" },
+  { id: "cpp", label: "C++", tag: "C++" },
+  { id: "c", label: "C", tag: "C" },
+  { id: "javascript", label: "JavaScript", tag: "JS" },
+  { id: "sql", label: "SQL", tag: "SQL" },
+  { id: "numpy", label: "NumPy", tag: "NUMPY" },
 ];
 
-interface ExecutionResult {
-  status: "Accepted" | "Wrong Answer" | "Runtime Error" | "Compilation Error" | "Time Limit Exceeded";
+export interface ExecutionResult {
+  status: "Accepted" | "Wrong Answer" | "Runtime Error" | "Compilation Error" | "Time Limit Exceeded" | "Need Solution" | "Execution Error";
   isSubmit?: boolean;
+  message?: string;
   runtime: number; // ms
   memory: number; // MB
   passedCount: number;
@@ -53,6 +69,7 @@ interface ExecutionResult {
     expected: string;
     actual: string;
     passed: boolean;
+    reason?: string;
     isHidden?: boolean;
   }[];
   consoleOutput?: string;
@@ -62,19 +79,168 @@ interface IDECodeEditorProps {
   problem: Problem;
   selectedLanguage: SupportedLanguage;
   onLanguageChange: (lang: SupportedLanguage) => void;
+  code: string;
+  onCodeChange: (code: string) => void;
   isRunning: boolean;
   isSubmitting: boolean;
   onRun: (code: string) => void;
   onSubmit: (code: string) => void;
   executionResult: ExecutionResult | null;
-  activeConsoleTab: "testcase" | "result" | "console";
-  setActiveConsoleTab: (tab: "testcase" | "result" | "console") => void;
+  activeConsoleTab: "testcase" | "result";
+  setActiveConsoleTab: (tab: "testcase" | "result") => void;
+  isFullScreen?: boolean;
+  onToggleFullScreen?: () => void;
+}
+
+/**
+ * PlaceMentor AI CodeMirror Dark Theme
+ * Rich charcoal/navy surface, crisp contrast, custom active line and gutter.
+ */
+const placeMentorDarkTheme = EditorView.theme(
+  {
+    "&": {
+      color: "#E2E8F0",
+      backgroundColor: "#141923",
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, Menlo, Monaco, monospace",
+      fontSize: "13.5px",
+      height: "100%",
+    },
+    ".cm-scroller": {
+      overflow: "auto",
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, Menlo, Monaco, monospace",
+      lineHeight: "1.65",
+    },
+    ".cm-content": {
+      caretColor: "#A78BFA",
+      padding: "14px 0",
+    },
+    "&.cm-focused .cm-cursor": {
+      borderLeftColor: "#A78BFA",
+      borderLeftWidth: "2px",
+    },
+    "&.cm-focused .cm-selectionBackground, ::selection": {
+      backgroundColor: "#312E81 !important",
+    },
+    ".cm-selectionMatch": {
+      backgroundColor: "rgba(139, 92, 246, 0.25)",
+    },
+    ".cm-gutters": {
+      backgroundColor: "#10141D",
+      color: "#64748B",
+      borderRight: "1px solid #1E2638",
+      paddingRight: "12px",
+      paddingLeft: "8px",
+      userSelect: "none",
+    },
+    ".cm-activeLine": {
+      backgroundColor: "#1B2232",
+    },
+    ".cm-activeLineGutter": {
+      backgroundColor: "#1B2232",
+      color: "#CBD5E1",
+      fontWeight: "bold",
+    },
+    ".cm-matchingBracket": {
+      backgroundColor: "rgba(139, 92, 246, 0.25)",
+      outline: "1px solid #8B5CF6",
+    },
+    ".cm-foldGutter": {
+      paddingLeft: "4px",
+      color: "#64748B",
+    },
+    ".cm-foldGutter .cm-gutterElement": {
+      cursor: "pointer",
+      transition: "color 0.15s ease",
+    },
+    ".cm-foldGutter .cm-gutterElement:hover": {
+      color: "#E2E8F0",
+    },
+    ".cm-tooltip": {
+      backgroundColor: "#182030",
+      border: "1px solid #28354D",
+      color: "#E2E8F0",
+      borderRadius: "8px",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+    },
+    ".cm-tooltip-autocomplete": {
+      "& > ul": {
+        fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+        fontSize: "12px",
+        maxHeight: "220px",
+      },
+      "& > ul > li": {
+        padding: "5px 10px",
+        borderRadius: "4px",
+      },
+      "& > ul > li[aria-selected]": {
+        backgroundColor: "#7C3AED",
+        color: "#ffffff",
+      },
+    },
+  },
+  { dark: true }
+);
+
+/**
+ * Syntax Highlighting Token Palette for PlaceMentor IDE
+ */
+const placeMentorDarkHighlightStyle = HighlightStyle.define([
+  { tag: t.keyword, color: "#C084FC", fontWeight: "bold" },
+  { tag: [t.name, t.deleted, t.character, t.propertyName, t.macroName], color: "#93C5FD" },
+  { tag: [t.function(t.variableName), t.labelName], color: "#60A5FA" },
+  { tag: [t.color, t.constant(t.name), t.standard(t.name)], color: "#34D399" },
+  { tag: [t.definition(t.name), t.separator], color: "#E2E8F0" },
+  { tag: [t.typeName, t.className, t.changed, t.annotation, t.modifier, t.self, t.namespace], color: "#818CF8" },
+  { tag: [t.number], color: "#FBBF24" },
+  { tag: [t.operator, t.operatorKeyword, t.url, t.escape, t.regexp, t.link, t.special(t.string)], color: "#94A3B8" },
+  { tag: [t.meta, t.comment], color: "#64748B", fontStyle: "italic" },
+  { tag: t.strong, fontWeight: "bold" },
+  { tag: t.emphasis, fontStyle: "italic" },
+  { tag: t.strikethrough, textDecoration: "line-through" },
+  { tag: t.link, color: "#818CF8", textDecoration: "underline" },
+  { tag: t.heading, fontWeight: "bold", color: "#60A5FA" },
+  { tag: [t.atom, t.bool, t.special(t.variableName)], color: "#F472B6" },
+  { tag: [t.processingInstruction, t.string, t.inserted], color: "#34D399" },
+  { tag: t.invalid, color: "#F87171" },
+]);
+
+/**
+ * Computes exact position offset in text for the editable solution line
+ */
+function findEditablePosition(text: string): number {
+  if (!text) return 0;
+  const lines = text.split("\n");
+  let offset = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (
+      line.includes("Write your solution") ||
+      line.includes("Write your vectorized") ||
+      line.includes("Write your SQL query") ||
+      line.includes("TODO")
+    ) {
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        const nextLineStart = offset + line.length + 1;
+        const indentMatch = line.match(/^(\s*)/);
+        const indentLen = indentMatch ? indentMatch[1].length : 4;
+        return nextLineStart + Math.min(nextLine.length, indentLen);
+      }
+      return offset + line.length;
+    }
+    offset += line.length + 1;
+  }
+
+  return text.length;
 }
 
 export default function IDECodeEditor({
   problem,
   selectedLanguage,
   onLanguageChange,
+  code,
+  onCodeChange,
   isRunning,
   isSubmitting,
   onRun,
@@ -82,100 +248,144 @@ export default function IDECodeEditor({
   executionResult,
   activeConsoleTab,
   setActiveConsoleTab,
+  isFullScreen = false,
+  onToggleFullScreen,
 }: IDECodeEditorProps) {
-  const { theme } = useTheme();
-
-  // Multi-language code state cache
-  const [codeCache, setCodeCache] = useState<Record<string, string>>({});
   const [activeTestCaseIdx, setActiveTestCaseIdx] = useState(0);
-  const [consoleHeight, setConsoleHeight] = useState(240);
+  const [consoleHeight, setConsoleHeight] = useState(250);
   const [consoleCollapsed, setConsoleCollapsed] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const editorRef = useRef<any>(null);
+  const cmRef = useRef<ReactCodeMirrorRef>(null);
   const isDraggingRef = useRef(false);
+  const lastPositionedKey = useRef<string>("");
 
-  const cacheKey = `${problem.id}_${selectedLanguage}`;
-  const initialCode = codeCache[cacheKey] ?? (problem.starterCodes as any)[selectedLanguage] ?? "";
+  // Keep latest callbacks/values in refs so extensions array remains referentially stable during typing
+  const codeRef = useRef(code);
+  codeRef.current = code;
+  const onRunRef = useRef(onRun);
+  onRunRef.current = onRun;
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
 
-  // Helper to place cursor inside editable function body
-  const placeCursorInBody = (editorInstance: any) => {
-    if (!editorInstance) return;
-    const model = editorInstance.getModel();
-    if (!model) return;
+  const positionKey = `${problem.id}_${selectedLanguage}`;
 
-    const lineCount = model.getLineCount();
-    let targetLine = 1;
-    let targetCol = 1;
-
-    for (let i = 1; i <= lineCount; i++) {
-      const content = model.getLineContent(i);
-      if (
-        content.includes("Write your") ||
-        content.includes("TODO") ||
-        content.includes("pass")
-      ) {
-        // If there's a next line, place on next line with appropriate indentation
-        if (i < lineCount) {
-          targetLine = i + 1;
-          const nextLineContent = model.getLineContent(i + 1);
-          targetCol = nextLineContent.length > 0 ? nextLineContent.length + 1 : 9;
-        } else {
-          targetLine = i;
-          targetCol = content.length + 1;
-        }
-        break;
-      }
+  // Filter available languages based on problem type
+  const isSqlProblem = problem.category === "Database & SQL" || problem.topic?.toLowerCase().includes("sql");
+  const languageOptions = useMemo(() => {
+    if (isSqlProblem) {
+      return [
+        { id: "sql" as SupportedLanguage, label: "SQL", tag: "SQL" },
+        { id: "python3" as SupportedLanguage, label: "Python 3", tag: "PY" },
+        { id: "javascript" as SupportedLanguage, label: "JavaScript", tag: "JS" },
+      ];
     }
+    return ALL_LANGUAGE_OPTIONS;
+  }, [isSqlProblem]);
 
-    if (targetLine === 1 && lineCount >= 3) {
-      targetLine = 3;
-      targetCol = 9;
-    }
-
-    editorInstance.setPosition({ lineNumber: targetLine, column: targetCol });
-    editorInstance.revealPositionInCenterIfOutsideViewport({ lineNumber: targetLine, column: targetCol });
-  };
-
-  // When problem or language changes, update the editor model without causing keystroke re-renders
+  // Position cursor dynamically when problem loads or language switches
   useEffect(() => {
-    if (editorRef.current) {
-      const code = codeCache[cacheKey] ?? (problem.starterCodes as any)[selectedLanguage] ?? "";
-      if (editorRef.current.getValue() !== code) {
-        editorRef.current.setValue(code);
-        setTimeout(() => placeCursorInBody(editorRef.current), 50);
+    if (lastPositionedKey.current === positionKey) return;
+    lastPositionedKey.current = positionKey;
+
+    const timer = setTimeout(() => {
+      const view = cmRef.current?.view;
+      if (view) {
+        const text = view.state.doc.toString();
+        const pos = findEditablePosition(text);
+        view.dispatch({
+          selection: { anchor: pos, head: pos },
+          scrollIntoView: true,
+        });
+        view.focus();
       }
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [positionKey]);
+
+  // Language Extension Resolver with active language parser
+  const languageExtension = useMemo(() => {
+    switch (selectedLanguage) {
+      case "python3":
+      case "python":
+      case "numpy":
+        return python();
+      case "javascript":
+        return javascript();
+      case "java":
+      case "java17":
+        return java();
+      case "c":
+      case "cpp":
+        return cpp();
+      case "sql":
+        return sql();
+      default:
+        return python();
     }
-  }, [problem.id, selectedLanguage]);
+  }, [selectedLanguage]);
 
-  const handleEditorDidMount: OnMount = (editor) => {
-    editorRef.current = editor;
-    placeCursorInBody(editor);
-    editor.focus();
+  // Indentation Rule per language (2 spaces for JS/SQL, 4 spaces for Python/Java/C++)
+  const isTwoSpaceLang = selectedLanguage === "javascript" || selectedLanguage === "sql";
+
+  // CodeMirror Extensions Bundle - Referentially stable across keystrokes
+  const extensions = useMemo(() => {
+    return [
+      languageExtension,
+      indentUnit.of(isTwoSpaceLang ? "  " : "    "),
+      EditorState.tabSize.of(isTwoSpaceLang ? 2 : 4),
+      placeMentorDarkTheme,
+      syntaxHighlighting(placeMentorDarkHighlightStyle),
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      highlightActiveLine(),
+      drawSelection(),
+      dropCursor(),
+      history(),
+      foldGutter(),
+      indentOnInput(),
+      bracketMatching(),
+      closeBrackets(),
+      autocompletion({
+        activateOnTyping: true,
+        maxRenderedOptions: 12,
+        defaultKeymap: true,
+      }),
+      keymap.of([
+        {
+          key: "Mod-Enter",
+          run: () => {
+            onRunRef.current(codeRef.current);
+            return true;
+          },
+        },
+        {
+          key: "Mod-Shift-Enter",
+          run: () => {
+            onSubmitRef.current(codeRef.current);
+            return true;
+          },
+        },
+        ...closeBracketsKeymap,
+        ...defaultKeymap,
+        ...historyKeymap,
+        ...foldKeymap,
+        ...completionKeymap,
+        indentWithTab,
+      ]),
+      EditorView.lineWrapping,
+    ];
+  }, [languageExtension, isTwoSpaceLang]);
+
+  const handleCopyText = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1500);
   };
 
-  const handleEditorChange = (value: string | undefined) => {
-    const val = value || "";
-    codeCache[cacheKey] = val;
-  };
-
-  const handleResetCode = () => {
-    const defaultStarter = (problem.starterCodes as any)[selectedLanguage] || "";
-    setCodeCache((prev) => ({
-      ...prev,
-      [cacheKey]: defaultStarter,
-    }));
-    if (editorRef.current) {
-      editorRef.current.setValue(defaultStarter);
-      setTimeout(() => placeCursorInBody(editorRef.current), 50);
-    }
-  };
-
-  const getCurrentCode = () => {
-    return editorRef.current ? editorRef.current.getValue() : initialCode;
-  };
-
-  // Vertical resize handlers for Bottom Test Console
-  const startVerticalResize = (e: React.MouseEvent) => {
+  // Drag Resizer logic for Console Panel
+  const handleMouseDown = (e: React.MouseEvent) => {
     isDraggingRef.current = true;
     const startY = e.clientY;
     const startHeight = consoleHeight;
@@ -198,163 +408,173 @@ export default function IDECodeEditor({
     window.addEventListener("mouseup", onMouseUp);
   };
 
-  const currentLangObj = LANGUAGE_OPTIONS.find((l) => l.id === selectedLanguage) || LANGUAGE_OPTIONS[0];
+  const currentTestCase = problem.testCases?.[activeTestCaseIdx] || {
+    input: "nums = [2,7,11,15], target = 9",
+    expectedOutput: "[0,1]",
+  };
+
+  // Parse structured input fields
+  const parsedInputs = useMemo(() => {
+    const inputStr = currentTestCase.input || "";
+    const parts = inputStr.split(/,\s*(?=[a-zA-Z_][a-zA-Z0-9_]*\s*=)/);
+    if (parts.length > 1 || inputStr.includes("=")) {
+      return parts.map((part) => {
+        const eqIdx = part.indexOf("=");
+        if (eqIdx >= 0) {
+          return {
+            name: part.substring(0, eqIdx).trim() + " =",
+            value: part.substring(eqIdx + 1).trim(),
+          };
+        }
+        return { name: "input =", value: part.trim() };
+      });
+    }
+    return [{ name: "input =", value: inputStr }];
+  }, [currentTestCase.input]);
 
   return (
-    <div className="h-full w-full flex flex-col bg-background text-foreground select-none overflow-hidden">
-      {/* 1. Editor Sub-Header: Language selector, Reset code, Quick stats */}
-      <div className="h-10 px-3 border-b border-border bg-card/90 flex items-center justify-between shrink-0">
+    <div className="h-full w-full flex flex-col bg-[#141923] text-foreground overflow-hidden">
+      {/* =========================================================================
+          1. CODE EDITOR TOP HEADER (Language selector on left, ONLY Fullscreen on right)
+         ========================================================================= */}
+      <div className="h-11 px-3.5 border-b border-[#1E2638] bg-[#10141D] flex items-center justify-between shrink-0 select-none z-10">
+        {/* Left: Enhanced Language Selector */}
         <div className="flex items-center gap-2">
-          {/* Language Dropdown */}
-          <select
-            value={selectedLanguage}
-            onChange={(e) => onLanguageChange(e.target.value as SupportedLanguage)}
-            className="px-2.5 py-1 rounded-lg border border-border bg-secondary text-foreground text-xs font-semibold focus:outline-none focus:border-purple-500 cursor-pointer shadow-sm"
-          >
-            {LANGUAGE_OPTIONS.map((lang) => (
-              <option key={lang.id} value={lang.id}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
-
-          <span className="text-[11px] text-muted-foreground font-mono hidden sm:inline">
-            Monaco Engine &bull; Auto-formatting enabled
-          </span>
+          <div className="relative inline-block">
+            <select
+              value={selectedLanguage}
+              onChange={(e) => onLanguageChange(e.target.value as SupportedLanguage)}
+              aria-label="Programming Language"
+              className="appearance-none pl-3 pr-8 py-1.5 text-xs font-semibold rounded-lg border border-[#28354D] bg-[#141923] text-[#E2E8F0] hover:border-[#8B5CF6]/60 focus:outline-none focus:border-[#8B5CF6] transition-colors cursor-pointer shadow-sm"
+            >
+              {languageOptions.map((lang) => (
+                <option key={lang.id} value={lang.id} className="bg-[#141923] text-[#E2E8F0] py-1">
+                  {lang.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-[#94A3B8] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleResetCode}
-            title="Reset code to default template"
-            className="p-1 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 text-[11px] font-medium"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Reset</span>
-          </button>
+        {/* Right: ONLY Fullscreen Icon Button (Zero clutter/extra buttons) */}
+        <div className="flex items-center">
+          {onToggleFullScreen && (
+            <button
+              type="button"
+              onClick={onToggleFullScreen}
+              title={isFullScreen ? "Exit Fullscreen" : "Fullscreen Workspace"}
+              className="p-1.5 rounded-lg text-[#94A3B8] hover:text-white hover:bg-[#1E2638] border border-transparent hover:border-[#28354D] transition-all"
+            >
+              {isFullScreen ? (
+                <Minimize2 className="w-4 h-4 text-[#A78BFA]" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 2. Monaco Editor Viewport (Flex-1) */}
-      <div className="flex-1 w-full relative min-h-[200px]">
-        <Editor
+      {/* =========================================================================
+          2. MAIN CODE EDITING CANVAS
+         ========================================================================= */}
+      <div className="flex-1 min-h-0 relative overflow-hidden bg-[#141923]">
+        <CodeMirror
+          ref={cmRef}
+          value={code}
           height="100%"
-          width="100%"
-          language={currentLangObj.monacoLang}
-          defaultValue={initialCode}
-          theme={theme === "dark" ? "vs-dark" : "light"}
-          onMount={handleEditorDidMount}
-          onChange={handleEditorChange}
-          options={{
-            fontSize: 14,
-            fontFamily: "'JetBrains Mono', 'Fira Code', Menlo, monospace",
-            lineNumbers: "on",
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            automaticLayout: true,
-            tabSize: 4,
-            insertSpaces: true,
-            cursorBlinking: "smooth",
-            cursorSmoothCaretAnimation: "on",
-            smoothScrolling: true,
-            padding: { top: 12, bottom: 12 },
-            renderLineHighlight: "all",
-            wordWrap: "on",
-            suggestOnTriggerCharacters: true,
-          }}
+          theme="dark"
+          extensions={extensions}
+          onChange={onCodeChange}
+          basicSetup={false}
+          className="h-full text-[13.5px] font-mono select-text"
         />
       </div>
 
-      {/* 3. Bottom Testcase / Console Drawer */}
+      {/* =========================================================================
+          3. BOTTOM TESTCASE & TEST RESULT CONSOLE
+         ========================================================================= */}
       <div
-        style={{ height: consoleCollapsed ? "36px" : `${consoleHeight}px` }}
-        className="border-t border-border bg-card flex flex-col shrink-0 transition-[height] duration-75 relative z-10 shadow-lg"
+        className="shrink-0 flex flex-col border-t border-[#1E2638] bg-[#0E131F] z-10 transition-all"
+        style={{ height: consoleCollapsed ? "40px" : `${consoleHeight}px` }}
       >
-        {/* Drag Handle Bar for vertical resizing */}
+        {/* Drag Resizer Bar */}
         <div
-          onMouseDown={startVerticalResize}
-          className="absolute -top-1.5 inset-x-0 h-3 cursor-row-resize flex items-center justify-center group z-20"
-        >
-          <div className="w-12 h-1 rounded-full bg-border group-hover:bg-purple-500 transition-colors" />
-        </div>
+          onMouseDown={handleMouseDown}
+          className="h-1.5 w-full cursor-ns-resize bg-transparent hover:bg-[#8B5CF6]/50 transition-colors shrink-0"
+          title="Drag to resize console"
+        />
 
-        {/* Console Header Tabs */}
-        <div className="h-9 px-3 border-b border-border bg-secondary/50 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-1">
+        {/* Console Header */}
+        <div className="h-10 px-4 border-b border-[#1E2638] bg-[#10141D] flex items-center justify-between shrink-0 select-none">
+          <div className="flex items-center gap-5">
             <button
+              type="button"
               onClick={() => {
                 setActiveConsoleTab("testcase");
                 setConsoleCollapsed(false);
               }}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+              className={`pb-2 pt-1 text-xs font-bold transition-all relative ${
                 activeConsoleTab === "testcase" && !consoleCollapsed
-                  ? "bg-card text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#8B5CF6]"
+                  : "text-[#94A3B8] hover:text-white"
               }`}
             >
-              Test Cases ({problem.testCases.length})
+              Testcases
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 setActiveConsoleTab("result");
                 setConsoleCollapsed(false);
               }}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`pb-2 pt-1 text-xs font-bold transition-all relative flex items-center gap-1.5 ${
                 activeConsoleTab === "result" && !consoleCollapsed
-                  ? "bg-card text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#8B5CF6]"
+                  : "text-[#94A3B8] hover:text-white"
               }`}
             >
               <span>Test Result</span>
               {executionResult && (
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    executionResult.status === "Accepted" ? "bg-emerald-500" : "bg-rose-500"
+                    executionResult.status === "Accepted" ? "bg-emerald-400" : "bg-rose-400"
                   }`}
                 />
               )}
             </button>
-
-            <button
-              onClick={() => {
-                setActiveConsoleTab("console");
-                setConsoleCollapsed(false);
-              }}
-              className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-                activeConsoleTab === "console" && !consoleCollapsed
-                  ? "bg-card text-foreground shadow-sm border border-border"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Output
-            </button>
           </div>
 
+          {/* Console Collapse / Expand Toggle */}
           <button
-            onClick={() => setConsoleCollapsed(!consoleCollapsed)}
-            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary"
+            type="button"
+            onClick={() => setConsoleCollapsed((prev) => !prev)}
+            className="p-1 text-[#94A3B8] hover:text-white rounded transition-colors"
             title={consoleCollapsed ? "Expand Console" : "Collapse Console"}
           >
             {consoleCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
         </div>
 
-        {/* Console Body Area */}
+        {/* Console Content Area */}
         {!consoleCollapsed && (
-          <div className="flex-1 overflow-y-auto p-3 text-xs font-mono">
-            {/* Tab 1: Test Cases */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-xs bg-[#0E131F]">
+            {/* Tab 1: Testcases */}
             {activeConsoleTab === "testcase" && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {problem.testCases.map((tc, idx) => (
+              <div className="space-y-4">
+                {/* Case Selection Pills */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(problem.testCases || []).map((_, idx) => (
                     <button
                       key={idx}
+                      type="button"
                       onClick={() => setActiveTestCaseIdx(idx)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                         activeTestCaseIdx === idx
-                          ? "bg-purple-600 text-white shadow-sm"
-                          : "bg-secondary text-muted-foreground hover:text-foreground"
+                          ? "bg-[#8B5CF6] text-white shadow-sm"
+                          : "bg-[#161D2B] text-[#94A3B8] hover:text-white border border-[#1E2638]"
                       }`}
                     >
                       Case {idx + 1}
@@ -362,20 +582,32 @@ export default function IDECodeEditor({
                   ))}
                 </div>
 
-                <div className="space-y-2 p-3 rounded-xl border border-border bg-secondary/30">
-                  <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Input:</span>
-                    <pre className="mt-0.5 p-2 rounded-lg bg-card border border-border text-foreground font-mono text-[11px] overflow-x-auto">
-                      {problem.testCases[activeTestCaseIdx]?.input}
-                    </pre>
-                  </div>
+                {/* Structured Input Cards */}
+                <div className="space-y-3">
+                  <span className="text-[11px] font-bold text-[#94A3B8] uppercase tracking-wider font-sans">
+                    Input Parameters
+                  </span>
 
-                  <div>
-                    <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Expected Output:</span>
-                    <pre className="mt-0.5 p-2 rounded-lg bg-card border border-border text-emerald-600 dark:text-emerald-400 font-mono text-[11px] overflow-x-auto">
-                      {problem.testCases[activeTestCaseIdx]?.expectedOutput}
-                    </pre>
-                  </div>
+                  {parsedInputs.map((inputItem, i) => (
+                    <div key={i} className="rounded-xl border border-[#1E2638] bg-[#141923] p-3 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] text-[#94A3B8]">
+                        <span className="font-sans">{inputItem.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText(inputItem.value, `input_${i}`)}
+                          className="text-[#94A3B8] hover:text-white transition-colors"
+                          title="Copy input value"
+                        >
+                          {copiedKey === `input_${i}` ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="text-[#E2E8F0] font-mono text-xs select-text">{inputItem.value}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -384,71 +616,142 @@ export default function IDECodeEditor({
             {activeConsoleTab === "result" && (
               <div>
                 {!executionResult ? (
-                  <div className="py-6 text-center text-muted-foreground space-y-1">
-                    <p className="text-xs">Run your code or submit to evaluate test cases.</p>
-                    <p className="text-[10px]">Click 'Run' for sample testcases or 'Submit' for full benchmark verification.</p>
+                  <div className="py-8 flex flex-col items-center justify-center text-center text-[#94A3B8] space-y-2 font-sans select-none">
+                    <div className="w-10 h-10 rounded-xl bg-[#161D2B] border border-[#1E2638] flex items-center justify-center text-[#64748B]">
+                      <Terminal className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium text-[#E2E8F0]">Run your code to see results here</p>
+                      <p className="text-[11px] text-[#64748B]">Click 'Run' for sample testcases or 'Submit' for final evaluation</p>
+                    </div>
+                  </div>
+                ) : executionResult.status === "Need Solution" ? (
+                  <div className="p-4 rounded-xl border border-[#8B5CF6]/30 bg-[#8B5CF6]/10 text-[#C4B5FD] space-y-1 font-sans">
+                    <p className="text-xs font-bold flex items-center gap-1.5 text-white">
+                      <ShieldCheck className="w-4 h-4 text-[#A78BFA] shrink-0" />
+                      <span>{executionResult.message || "Write your solution before running the test cases."}</span>
+                    </p>
+                    <p className="text-[11px] text-[#94A3B8]">
+                      Implement your solution in the editor above, then click Run or Submit.
+                    </p>
+                  </div>
+                ) : executionResult.status === "Compilation Error" ? (
+                  <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 space-y-2">
+                    <p className="text-xs font-bold flex items-center gap-1.5 font-sans text-rose-300">
+                      <XCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span>Compilation / Syntax Error</span>
+                    </p>
+                    <pre className="p-2.5 rounded-lg bg-[#141923] border border-rose-500/20 text-rose-300 font-mono text-[11px] whitespace-pre-wrap overflow-x-auto select-text">
+                      {executionResult.message || executionResult.consoleOutput || "Syntax error detected in solution."}
+                    </pre>
+                  </div>
+                ) : executionResult.status === "Runtime Error" ? (
+                  <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-400 space-y-2">
+                    <p className="text-xs font-bold flex items-center gap-1.5 font-sans text-rose-300">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span>Runtime Error</span>
+                    </p>
+                    <pre className="p-2.5 rounded-lg bg-[#141923] border border-rose-500/20 text-rose-300 font-mono text-[11px] whitespace-pre-wrap overflow-x-auto select-text">
+                      {executionResult.message || executionResult.consoleOutput || "Runtime exception occurred."}
+                    </pre>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-border">
-                      <div className="flex items-center gap-2">
+                  <div className="space-y-3 font-sans">
+                    {/* Header Result Summary */}
+                    <div className="flex items-center justify-between flex-wrap gap-2.5 pb-2.5 border-b border-[#1E2638]">
+                      <div className="flex items-center gap-2.5">
                         {executionResult.status === "Accepted" ? (
-                          <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
+                          <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-sm">
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Accepted</span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-bold text-sm">
+                          <div className="flex items-center gap-1.5 text-rose-400 font-bold text-sm">
                             <XCircle className="w-4 h-4" />
                             <span>{executionResult.status}</span>
                           </div>
                         )}
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-[#94A3B8]">
                           ({executionResult.passedCount}/{executionResult.totalCount} test cases passed)
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" />
+                      <div className="flex items-center gap-3 text-xs font-mono text-[#94A3B8]">
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-[#A78BFA]" />
                           <span>{executionResult.runtime} ms</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <HardDrive className="w-3.5 h-3.5 text-blue-500" />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <HardDrive className="w-3.5 h-3.5 text-[#A78BFA]" />
                           <span>{executionResult.memory} MB</span>
-                        </span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
+                    {/* Detailed Testcase Results */}
+                    <div className="space-y-2.5">
                       {executionResult.testCaseResults?.map((res, i) => (
                         <div
                           key={i}
-                          className={`p-2.5 rounded-xl border space-y-1.5 ${
-                            res.passed ? "border-emerald-500/30 bg-emerald-500/5" : "border-rose-500/30 bg-rose-500/5"
+                          className={`p-3 rounded-xl border space-y-2 ${
+                            res.passed
+                              ? "border-emerald-500/30 bg-emerald-500/5"
+                              : "border-rose-500/30 bg-rose-500/5"
                           }`}
                         >
-                          <div className="flex items-center justify-between text-[11px] font-bold">
-                            <span>
-                              {res.isHidden ? "Hidden Benchmark Case" : `Testcase ${i + 1}`}
+                          <div className="flex items-center justify-between text-xs font-bold">
+                            <span className="text-[#E2E8F0]">
+                              {res.isHidden ? `Hidden Benchmark Case ${i + 1}` : `Case ${i + 1}`}
                             </span>
-                            <span className={res.passed ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}>
-                              {res.passed ? "Passed" : "Failed"}
+                            <span className={res.passed ? "text-emerald-400" : "text-rose-400"}>
+                              {res.passed ? "✓ Passed" : "✕ Wrong Answer"}
                             </span>
                           </div>
 
                           {!res.isHidden && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                            <div className="space-y-2 text-[11px] font-mono select-text">
                               <div>
-                                <span className="text-muted-foreground">Expected:</span>
-                                <pre className="p-1 rounded bg-card text-emerald-600 dark:text-emerald-400 overflow-x-auto">{res.expected}</pre>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Actual:</span>
-                                <pre className={`p-1 rounded bg-card overflow-x-auto ${res.passed ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400 font-bold"}`}>
-                                  {res.actual}
+                                <span className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-sans">
+                                  Input:
+                                </span>
+                                <pre className="p-2 rounded-lg bg-[#141923] border border-[#1E2638] text-[#E2E8F0] overflow-x-auto whitespace-pre-wrap">
+                                  {res.input}
                                 </pre>
                               </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                  <span className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-sans">
+                                    Expected Output:
+                                  </span>
+                                  <pre className="p-2 rounded-lg bg-[#141923] border border-[#1E2638] text-emerald-400 overflow-x-auto font-bold whitespace-pre-wrap">
+                                    {res.expected}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-sans">
+                                    Your Output:
+                                  </span>
+                                  <pre
+                                    className={`p-2 rounded-lg bg-[#141923] border border-[#1E2638] overflow-x-auto whitespace-pre-wrap ${
+                                      res.passed ? "text-emerald-400" : "text-rose-400 font-bold"
+                                    }`}
+                                  >
+                                    {res.actual}
+                                  </pre>
+                                </div>
+                              </div>
+
+                              {!res.passed && res.reason && (
+                                <div>
+                                  <span className="text-[10px] text-[#94A3B8] uppercase font-bold tracking-wider font-sans">
+                                    Reason:
+                                  </span>
+                                  <p className="text-rose-400 font-medium text-[11px] pt-0.5 font-sans">
+                                    {res.reason}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -458,43 +761,8 @@ export default function IDECodeEditor({
                 )}
               </div>
             )}
-
-            {/* Tab 3: Output */}
-            {activeConsoleTab === "console" && (
-              <div className="space-y-2">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Standard Output:</span>
-                <pre className="p-3 rounded-xl bg-secondary/50 border border-border text-foreground font-mono text-xs overflow-x-auto min-h-[60px]">
-                  {executionResult?.consoleOutput || "No stdout output logged during execution."}
-                </pre>
-              </div>
-            )}
           </div>
         )}
-
-        {/* Footer Run / Submit Action Bar */}
-        <div className="h-12 px-3 border-t border-border bg-card flex items-center justify-between shrink-0">
-          <div className="text-[11px] text-muted-foreground font-mono hidden sm:inline">
-            Press <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary font-bold">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary font-bold">Enter</kbd> to Run
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              disabled={isRunning || isSubmitting}
-              onClick={() => onRun(getCurrentCode())}
-              className="px-4 py-1.5 rounded-xl border border-border bg-secondary hover:bg-secondary/80 text-foreground text-xs font-bold transition-all disabled:opacity-50"
-            >
-              {isRunning ? "Running..." : "Run Code"}
-            </button>
-
-            <button
-              disabled={isRunning || isSubmitting}
-              onClick={() => onSubmit(getCurrentCode())}
-              className="px-5 py-1.5 rounded-xl text-white text-xs font-bold shadow-md transition-all pm-btn-gradient disabled:opacity-50"
-            >
-              {isSubmitting ? "Evaluating..." : "Submit Solution"}
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

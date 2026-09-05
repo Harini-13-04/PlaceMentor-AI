@@ -1,7 +1,8 @@
+import os
+from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
-import os
+import bcrypt
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "d88bae1b269d698ce339c2ccb2e0d8ff380266513b17930a9c5bbef7b3505f7e")
 ALGORITHM = os.environ.get("ALGORITHM", "HS256")
@@ -17,7 +18,12 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        if hashed_password and hashed_password.startswith("$2"):
+            return bcrypt.checkpw(plain_password.encode("utf-8")[:72], hashed_password.encode("utf-8"))
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None) -> str:

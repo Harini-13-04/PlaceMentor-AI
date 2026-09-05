@@ -14,6 +14,7 @@ export interface Problem {
   companies: string[];
   status: "Not Started" | "Attempted" | "Solved";
   mastery: number; // percentage
+  acceptanceRate?: string;
   description: string;
   examples: {
     input: string;
@@ -56,13 +57,28 @@ function makeStarter(
     python: `def ${funcName}(${paramsPy}):\n    # Write your solution below\n    \n`,
     java: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your solution below\n        \n    }\n}\n`,
     java17: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your solution below\n        \n    }\n}\n`,
-    sql: sqlQuery,
+    sql: sqlQuery || "-- SQL is not supported for this algorithmic problem\n",
     numpy: `import numpy as np\n\ndef ${funcName}(arr):\n    # Write your vectorized NumPy solution\n    \n`,
     c: `${cppRet === "vector<int>" ? "int*" : cppRet} ${funcName}(${paramsCpp}) {\n    // Write your solution below\n    \n}\n`,
     cpp: `class Solution {\npublic:\n    ${cppRet} ${funcName}(${paramsCpp}) {\n        // Write your solution below\n        \n    }\n};\n`,
-    javascript: `/**\n * @param {${jsParams}}\n * @return {${returnPy}}\n */\nfunction ${funcName}(${jsParams.replace(/: [a-zA-Z<>\[\], ]+/g, "")}) {\n    // Write your solution below\n    \n}\n`,
+    javascript: `/**\n * @param {${jsParams}}\n * @return {${returnPy}}\n */\nfunction ${funcName}(${jsParams.replace(/: [a-zA-Z<>[\\], ]+/g, "")}) {\n    // Write your solution below\n    \n}\n`,
   };
 }
+
+export function getStarterCode(problem: Problem, lang: string): string {
+  const codes = problem.starterCodes as Record<string, string> | undefined;
+  if (codes && typeof codes[lang] === "string" && codes[lang].length > 0) {
+    return codes[lang];
+  }
+  if (lang === "sql") {
+    return "-- SQL is not supported for this problem\n";
+  }
+  if (lang === "python3" || lang === "python" || lang === "numpy") {
+    return `# Write your ${lang} solution below\n`;
+  }
+  return `// Write your ${lang} solution below\n`;
+}
+
 
 export const TOP_COMPANIES = [
   "All Companies",
@@ -96,6 +112,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Google", "Microsoft", "TCS", "Infosys", "Zoho"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "51.4%",
     description: "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nYou can return the answer in any order.",
     examples: [
       { input: "nums = [2,7,11,15], target = 9", output: "[0,1]", explanation: "Because nums[0] + nums[1] == 9, we return [0, 1]." },
@@ -153,6 +170,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Accenture", "Wipro", "TCS", "Cognizant"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "62.1%",
     description: "Given an integer array `nums`, return `true` if any value appears at least twice in the array, and return `false` if every element is distinct.",
     examples: [
       { input: "nums = [1,2,3,1]", output: "true" },
@@ -190,6 +208,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Google", "Amazon", "Cognizant", "TCS", "Capgemini", "Freshworks"],
     status: "Attempted",
     mastery: 60,
+    acceptanceRate: "64.3%",
     description: "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn Anagram is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
     examples: [
       { input: 's = "anagram", t = "nagaram"', output: "true" },
@@ -226,6 +245,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Zoho", "Deloitte", "IBM"],
     status: "Not Started",
     mastery: 0,
+    acceptanceRate: "67.8%",
     description: "Given an array of strings `strs`, group the anagrams together. You can return the answer in any order.",
     examples: [
       { input: 'strs = ["eat","tea","tan","ate","nat","bat"]', output: '[["bat"],["nat","tan"],["ate","eat","tea"]]' },
@@ -262,6 +282,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "HCL", "Accenture", "Infosys"],
     status: "Not Started",
     mastery: 0,
+    acceptanceRate: "63.5%",
     description: "Given an integer array `nums` and an integer `k`, return the `k` most frequent elements. You may return the answer in any order.",
     examples: [
       { input: "nums = [1,1,1,2,2,3], k = 2", output: "[1,2]" },
@@ -296,6 +317,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Wipro", "Capgemini", "Deloitte"],
     status: "Not Started",
     mastery: 0,
+    acceptanceRate: "65.9%",
     description: "Given an integer array `nums`, return an array `answer` such that `answer[i]` is equal to the product of all the elements of `nums` except `nums[i]`.\n\nThe product of any prefix or suffix of `nums` is guaranteed to fit in a 32-bit integer.\n\nYou must write an algorithm that runs in O(n) time and without using the division operation.",
     examples: [
       { input: "nums = [1,2,3,4]", output: "[24,12,8,6]" },
@@ -334,6 +356,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Microsoft", "Amazon", "TCS", "Cognizant", "Zoho", "HCL"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "46.2%",
     description: "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.",
     examples: [
       { input: 's = "A man, a plan, a canal: Panama"', output: "true" },
@@ -367,6 +390,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Infosys", "IBM", "Accenture"],
     status: "Attempted",
     mastery: 50,
+    acceptanceRate: "34.1%",
     description: "Given an integer array nums, return all the triplets `[nums[i], nums[j], nums[k]]` such that `i != j`, `i != k`, and `j != k`, and `nums[i] + nums[j] + nums[k] == 0`.\n\nNotice that the solution set must not contain duplicate triplets.",
     examples: [
       { input: "nums = [-1,0,1,2,-1,-4]", output: "[[-1,-1,2],[-1,0,1]]" },
@@ -403,6 +427,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Google", "Amazon", "Adobe", "Freshworks", "TCS"],
     status: "Not Started",
     mastery: 0,
+    acceptanceRate: "54.9%",
     description: "You are given an integer array `height` of length `n`. Find two lines that together with the x-axis form a container, such that the container contains the most water.\n\nReturn the maximum amount of water a container can store.",
     examples: [
       { input: "height = [1,8,6,2,5,4,8,3,7]", output: "49" },
@@ -434,6 +459,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Cognizant", "Wipro", "Zoho"],
     status: "Attempted",
     mastery: 50,
+    acceptanceRate: "34.8%",
     description: "Given a string `s`, find the length of the longest substring without repeating characters.",
     examples: [
       { input: 's = "abcabcbb"', output: "3", explanation: "The answer is 'abc', with the length of 3." },
@@ -471,6 +497,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "TCS", "Infosys", "Capgemini"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "41.2%",
     description: "Given a string `s` containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
     examples: [
       { input: 's = "()"', output: "true" },
@@ -504,6 +531,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Accenture", "HCL", "IBM"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "75.6%",
     description: "Given the `head` of a singly linked list, reverse the list, and return the reversed list.",
     examples: [
       { input: "head = [1,2,3,4,5]", output: "[5,4,3,2,1]" },
@@ -540,6 +568,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Google", "Amazon", "Microsoft", "Deloitte", "Zoho"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "77.4%",
     description: "Given the `root` of a binary tree, invert the tree, and return its root.",
     examples: [
       { input: "root = [4,2,7,1,3,6,9]", output: "[4,7,2,9,6,3,1]" },
@@ -572,6 +601,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Google", "Microsoft", "TCS", "Infosys", "IBM"],
     status: "Not Started",
     mastery: 0,
+    acceptanceRate: "58.7%",
     description: "Given an `m x n` 2D binary grid `grid` which represents a map of '1's (land) and '0's (water), return the number of islands.\n\nAn island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically.",
     examples: [
       { input: 'grid = [["1","1","1","1","0"],["1","1","0","1","0"],["1","1","0","0","0"],["0","0","0","0","0"]]', output: "1" }
@@ -602,6 +632,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Accenture", "Zoho", "Cognizant"],
     status: "Not Started",
     mastery: 0,
+    acceptanceRate: "47.3%",
     description: "Given an array of `intervals` where `intervals[i] = [start_i, end_i]`, merge all overlapping intervals, and return an array of the non-overlapping intervals that cover all the intervals in the input.",
     examples: [
       { input: "intervals = [[1,3],[2,6],[8,10],[15,18]]", output: "[[1,6],[8,10],[15,18]]" }
@@ -635,6 +666,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Google", "Apple", "TCS", "Wipro", "Infosys"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "53.2%",
     description: "You are climbing a staircase. It takes `n` steps to reach the top. Each time you can either climb 1 or 2 steps. In how many distinct ways can you climb to the top?",
     examples: [
       { input: "n = 2", output: "2" },
@@ -663,6 +695,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Capgemini", "Deloitte", "IBM"],
     status: "Attempted",
     mastery: 40,
+    acceptanceRate: "43.7%",
     description: "You are given an integer array `coins` representing coins of different denominations and an integer `amount` representing a total amount of money. Return the fewest number of coins that you need to make up that amount.",
     examples: [
       { input: "coins = [1,2,5], amount = 11", output: "3", explanation: "11 = 5 + 5 + 1" },
@@ -699,6 +732,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "TCS", "Accenture", "Cognizant", "Infosys"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "74.2%",
     description: "Write a solution to report the first name, last name, city, and state of each person in the `Person` table. If the address of a `personId` is not present in the `Address` table, report `null` instead.",
     examples: [
       {
@@ -711,7 +745,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     optimalApproach: ["SELECT p.firstName, p.lastName, a.city, a.state FROM Person p LEFT JOIN Address a ON p.personId = a.personId;"],
     timeComplexity: "O(n + m)",
     spaceComplexity: "O(n)",
-    starterCodes: makeStarter("combineTwoTables", "", "", "", "", "", "", "", "SELECT p.firstName, p.lastName, a.city, a.state\nFROM Person p\nLEFT JOIN Address a ON p.personId = a.personId;"),
+    starterCodes: makeStarter("combineTwoTables", "", "", "", "", "", "", "", "-- Write your SQL query below\nSELECT \n"),
     testCases: [
       { input: "Execute Table Query", expectedOutput: "Joined Table View" }
     ],
@@ -728,6 +762,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Google", "LinkedIn", "TCS", "Wipro", "Zoho"],
     status: "Solved",
     mastery: 100,
+    acceptanceRate: "39.8%",
     description: "Write a solution to find the second highest salary from the `Employee` table. If there is no second highest salary, return `null`.",
     examples: [
       { input: "Employee = [[1, 100], [2, 200], [3, 300]]", output: "200" }
@@ -737,7 +772,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     optimalApproach: ["SELECT MAX(salary) AS SecondHighestSalary FROM Employee WHERE salary < (SELECT MAX(salary) FROM Employee);"],
     timeComplexity: "O(n)",
     spaceComplexity: "O(1)",
-    starterCodes: makeStarter("secondHighestSalary", "", "", "", "", "", "", "", "SELECT MAX(salary) AS SecondHighestSalary\nFROM Employee\nWHERE salary < (SELECT MAX(salary) FROM Employee);"),
+    starterCodes: makeStarter("secondHighestSalary", "", "", "", "", "", "", "", "-- Write your SQL query below\nSELECT \n"),
     testCases: [
       { input: "Execute Salary Query", expectedOutput: "200" }
     ],
@@ -758,6 +793,7 @@ export const PROBLEMS_DATASET: Problem[] = [
     companies: ["Amazon", "Microsoft", "Google", "Bloomberg", "Freshworks", "IBM"],
     status: "Attempted",
     mastery: 50,
+    acceptanceRate: "42.6%",
     description: "Design a data structure that follows the constraints of a Least Recently Used (LRU) cache with O(1) get and put operations.",
     examples: [
       { input: '["LRUCache", "put", "put", "get", "put", "get", "put", "get", "get", "get"]\n[[2], [1, 1], [2, 2], [1], [3, 3], [2], [4, 4], [1], [3], [4]]', output: "[null, null, null, 1, null, -1, null, -1, 3, 4]" }
@@ -780,3 +816,87 @@ export const PROBLEMS_DATASET: Problem[] = [
     ]
   }
 ];
+
+/**
+ * Robust Problem Lookup with normalization
+ * Resolves ID by exact match, case-insensitive match, or slug-normalized match.
+ */
+export function getProblemById(idOrSlug: string | number | null | undefined): Problem | undefined {
+  if (idOrSlug === null || idOrSlug === undefined) return undefined;
+  const raw = String(idOrSlug).trim();
+  if (!raw) return undefined;
+
+  const normalized = raw.toLowerCase().replace(/[\s_]+/g, "-");
+
+  // 1. Exact match
+  const exact = PROBLEMS_DATASET.find((p) => p.id === raw);
+  if (exact) return exact;
+
+  // 2. Normalized slug match
+  const slugMatch = PROBLEMS_DATASET.find((p) => p.id.toLowerCase() === normalized);
+  if (slugMatch) return slugMatch;
+
+  // 3. Title match (case-insensitive)
+  const titleMatch = PROBLEMS_DATASET.find(
+    (p) => p.title.toLowerCase() === raw.toLowerCase() || p.title.toLowerCase().replace(/[\s_]+/g, "-") === normalized
+  );
+  if (titleMatch) return titleMatch;
+
+  // 4. Numeric 1-based or 0-based index lookup fallback if numeric string provided
+  const num = parseInt(raw, 10);
+  if (!isNaN(num)) {
+    if (num >= 1 && num <= PROBLEMS_DATASET.length) {
+      return PROBLEMS_DATASET[num - 1];
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Development-time validation to report missing or duplicate problem configurations.
+ */
+export function validateProblemsDataset(): void {
+  if (typeof window === "undefined" || (import.meta as any)?.env?.MODE === "production") return;
+
+  const seenIds = new Set<string>();
+  const requiredLangs = ["python3", "python", "java", "java17", "sql", "numpy", "c", "cpp", "javascript"] as const;
+
+  PROBLEMS_DATASET.forEach((problem, index) => {
+    const missing: string[] = [];
+    if (!problem.id) missing.push("id");
+    if (!problem.title) missing.push("title");
+    if (!problem.description) missing.push("description");
+    if (!problem.difficulty) missing.push("difficulty");
+    if (!problem.testCases || problem.testCases.length === 0) missing.push("testCases");
+    if (!problem.starterCodes) {
+      missing.push("starterCodes");
+    } else {
+      requiredLangs.forEach((lang) => {
+        if (typeof (problem.starterCodes as any)[lang] !== "string") {
+          missing.push(`starterCode:${lang}`);
+        }
+      });
+    }
+
+    if (seenIds.has(problem.id)) {
+      console.warn(`[Problem Validation] Duplicate Problem ID detected: "${problem.id}" at index ${index}`);
+    } else if (problem.id) {
+      seenIds.add(problem.id);
+    }
+
+    if (missing.length > 0) {
+      console.warn(
+        `[Problem Validation] Problem ${index + 1} ("${problem.title || "Untitled"}") is missing fields: ${missing.join(", ")}`
+      );
+    }
+  });
+}
+
+// Auto-run validation in development
+try {
+  validateProblemsDataset();
+} catch {
+  // Silent in non-dev or restricted environments
+}
+

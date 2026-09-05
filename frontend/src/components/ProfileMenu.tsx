@@ -7,8 +7,8 @@ import {
   Settings,
   LogOut,
   ChevronDown,
-  Sparkles,
 } from "lucide-react";
+
 
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);

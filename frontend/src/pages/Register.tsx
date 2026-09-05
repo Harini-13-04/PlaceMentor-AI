@@ -12,7 +12,6 @@ import {
   Building,
   Eye,
   EyeOff,
-  CheckCircle2,
   Sun,
   Moon,
   Loader2,
@@ -31,7 +30,6 @@ export default function Register() {
   const [department, setDepartment] = useState("Computer Science & Engineering");
   const [college, setCollege] = useState("SRM Institute of Science and Technology");
   const [showPassword, setShowPassword] = useState(false);
-  const [agreeTerms, setAgreeTerms] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,10 +51,6 @@ export default function Register() {
       return;
     }
 
-    if (!agreeTerms) {
-      setErrorMsg("Please agree to the terms and privacy policy.");
-      return;
-    }
 
     const res = await register(fullName, email, password, department, college);
     if (res.success) {
