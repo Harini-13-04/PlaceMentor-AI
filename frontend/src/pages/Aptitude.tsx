@@ -75,7 +75,7 @@ export default function Aptitude() {
 
   // Timer effect during active practice
   useEffect(() => {
-    let interval: any;
+    let interval: NodeJS.Timeout | number;
     if (isTimerRunning) {
       interval = setInterval(() => {
         setElapsedSeconds((s) => s + 1);
@@ -83,6 +83,7 @@ export default function Aptitude() {
     }
     return () => clearInterval(interval);
   }, [isTimerRunning]);
+
 
   // Start Topic Practice in FULL PAGE mode
   const handleStartPractice = (category: AptitudeCategory, topic: string, diff: "Easy" | "Medium" | "Hard") => {
@@ -157,12 +158,13 @@ export default function Aptitude() {
     setViewMode("result");
   };
 
-  const categoryIcons: Record<AptitudeCategory, any> = {
+  const categoryIcons: Record<AptitudeCategory, React.ComponentType<{ className?: string }>> = {
     "Quantitative Aptitude": Calculator,
     "Logical Reasoning": Brain,
     "Data Interpretation": BarChart3,
     "Verbal Ability": BookOpen,
   };
+
 
   // Helper to render distinct aesthetic visual header for each topic card matching Reference Image 2
   const renderTopicVisual = (topic: string) => {
@@ -270,6 +272,86 @@ export default function Aptitude() {
           <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
             <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm">
               <Table2 className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Direction Sense":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm">
+              <Compass className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Clocks & Calendars":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
+              <Calendar className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Syllogisms":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
+              <Scale className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Line Graphs Trend":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-sm">
+              <TrendingUp className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Caselet DI":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400 shadow-sm">
+              <FileSpreadsheet className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Reading Comprehension":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
+              <BookOpen className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Sentence Correction & Grammar":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm">
+              <SpellCheck className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Para Jumbles":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 dark:text-orange-400 shadow-sm">
+              <AlignLeft className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Synonyms & Antonyms":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm">
+              <Quote className="w-7 h-7" />
+            </div>
+          </div>
+        );
+      case "Idioms & Phrases":
+        return (
+          <div className="w-full h-32 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
+              <FileText className="w-7 h-7" />
             </div>
           </div>
         );

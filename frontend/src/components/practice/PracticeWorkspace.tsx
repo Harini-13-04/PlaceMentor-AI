@@ -1,81 +1,134 @@
-import React, { useState, useRef } from "react";
-import { Problem } from "@/data/problems";
+import React, { useState, useRef, useEffect } from "react";
+import { Problem, PROBLEMS_DATASET, getStarterCode } from "@/data/problems";
 import { useTheme } from "@/context/ThemeContext";
-import IDECodeEditor, { SupportedLanguage } from "./IDECodeEditor";
+import IDECodeEditor, { SupportedLanguage, ExecutionResult } from "./IDECodeEditor";
+import AIMentorSidebar from "./AIMentorSidebar";
+import { executeCodeSubmissionAsync, isStarterOrEmpty } from "@/utils/codeExecutor";
 import {
   ChevronLeft,
+  ChevronRight,
   Play,
-  CheckCircle2,
-  XCircle,
-  FileText,
-  History,
+  Bookmark,
+  BookmarkCheck,
   Sparkles,
-  Sun,
-  Moon,
-  Check,
-  X,
   Loader2,
-  Clock,
-  HardDrive,
-  Code2,
-  HelpCircle,
-  Lightbulb,
-  Zap,
+  Send,
+  X,
+  Bot,
+  CheckCircle2,
+  AlertCircle,
+  ThumbsUp,
+  MessageSquare,
 } from "lucide-react";
 
 interface PracticeWorkspaceProps {
   problem: Problem;
   onBackToList: () => void;
+  onSelectProblem?: (problemId: string) => void;
   onProblemSolved?: (problemId: string) => void;
 }
 
 export function PracticeWorkspace({
   problem,
   onBackToList,
+  onSelectProblem,
   onProblemSolved,
 }: PracticeWorkspaceProps) {
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
+
+  // Full Screen / Focus Mode state (collapses left problem description)
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  // AI Mentor Sidebar Open / Closed state (defaults to closed, toggleable)
+  const [isAiBotOpen, setIsAiBotOpen] = useState(false);
 
   // Left Panel Width (px)
-  const [leftPanelWidth, setLeftPanelWidth] = useState(520);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(440);
 
-  // Active tab in Left Panel: "description" | "submissions" | "prepGuide"
-  const [activeTab, setActiveTab] = useState<"description" | "submissions" | "prepGuide">("description");
+  // Right AI Mentor Sidebar Width (px)
+  const [rightPanelWidth, setRightPanelWidth] = useState(360);
 
-  // Language state (default Python 3)
-  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>("python3");
+  // Active tab in Left Panel: "description" | "hints" | "solutions" | "submissions"
+  const [activeLeftTab, setActiveLeftTab] = useState<"description" | "hints" | "solutions" | "submissions">("description");
+
+  // Bookmarking state
+  const [isBookmarked, setIsBookmarked] = useState(false);
+
+  // Likes counter
+  const [likeCount, setLikeCount] = useState(4320);
+  const [hasLiked, setHasLiked] = useState(false);
+
+  // Per (problem, language) drafts cache
+  const [savedDrafts, setSavedDrafts] = useState<Record<string, string>>({});
+
+  // Language state: Default to SQL for SQL problems, otherwise Python 3
+  const isSqlProblem = problem.category === "Database & SQL" || problem.topic?.toLowerCase().includes("sql");
+  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(
+    isSqlProblem ? "sql" : "python3"
+  );
+
+  // Current code in editor
+  const [currentCode, setCurrentCode] = useState<string>(() =>
+    getStarterCode(problem, isSqlProblem ? "sql" : "python3")
+  );
 
   // Execution & Submission state
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [executionResult, setExecutionResult] = useState<any | null>(null);
-  const [activeConsoleTab, setActiveConsoleTab] = useState<"testcase" | "result" | "console">("testcase");
+  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null);
+  const [activeConsoleTab, setActiveConsoleTab] = useState<"testcase" | "result">("testcase");
 
-  // Mock submission history state
+  // Submissions list
   const [submissionsList, setSubmissionsList] = useState([
     {
       id: 1,
       status: "Accepted",
-      language: "Python 3",
+      language: isSqlProblem ? "SQL" : "Python 3",
       runtime: "38 ms",
       memory: "15.9 MB",
       date: "Just now",
       notes: "Beats 89.4% in runtime",
     },
-    {
-      id: 2,
-      status: "Accepted",
-      language: "Python 3",
-      runtime: "44 ms",
-      memory: "16.2 MB",
-      date: "Aug 26, 2026",
-      notes: "Initial working solution",
-    },
   ]);
 
-  // Dragging ref for resizable divider
-  const isDraggingLeft = useRef(false);
+  // Handle language switch with isolated per-(problem, language) drafts
+  const handleLanguageChange = (newLang: SupportedLanguage) => {
+    if (newLang === selectedLanguage) return;
 
+    const currentKey = `${problem.id}_${selectedLanguage}`;
+    const nextKey = `${problem.id}_${newLang}`;
+
+    // 1. Save current code in drafts
+    setSavedDrafts((prev) => ({
+      ...prev,
+      [currentKey]: currentCode,
+    }));
+
+    // 2. Fetch draft for new language or default starter
+    const nextCode = savedDrafts[nextKey] || getStarterCode(problem, newLang);
+
+    // 3. Update state
+    setSelectedLanguage(newLang);
+    setCurrentCode(nextCode);
+    setExecutionResult(null);
+    setActiveConsoleTab("testcase");
+  };
+
+  // Reset execution result & sync starter code whenever problem changes
+  useEffect(() => {
+    const isSql = problem.category === "Database & SQL" || problem.topic?.toLowerCase().includes("sql");
+    const lang: SupportedLanguage = isSql ? "sql" : "python3";
+    const key = `${problem.id}_${lang}`;
+    const initialCode = savedDrafts[key] || getStarterCode(problem, lang);
+
+    setSelectedLanguage(lang);
+    setCurrentCode(initialCode);
+    setExecutionResult(null);
+    setActiveConsoleTab("testcase");
+  }, [problem.id]);
+
+  // Left Panel Drag Resizer
+  const isDraggingLeft = useRef(false);
   const startLeftResize = (e: React.MouseEvent) => {
     isDraggingLeft.current = true;
     const startX = e.clientX;
@@ -84,7 +137,7 @@ export function PracticeWorkspace({
     const onMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingLeft.current) return;
       const deltaX = moveEvent.clientX - startX;
-      const newWidth = Math.max(340, Math.min(window.innerWidth * 0.65, startWidth + deltaX));
+      const newWidth = Math.max(300, Math.min(window.innerWidth * 0.55, startWidth + deltaX));
       setLeftPanelWidth(newWidth);
     };
 
@@ -98,427 +151,534 @@ export function PracticeWorkspace({
     window.addEventListener("mouseup", onMouseUp);
   };
 
-  // Run visible test cases
-  const handleRun = (code: string) => {
+  // Right Panel Drag Resizer for AI Mentor
+  const isDraggingRight = useRef(false);
+  const startRightResize = (e: React.MouseEvent) => {
+    isDraggingRight.current = true;
+    const startX = e.clientX;
+    const startWidth = rightPanelWidth;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDraggingRight.current) return;
+      const deltaX = startX - moveEvent.clientX;
+      const newWidth = Math.max(280, Math.min(window.innerWidth * 0.45, startWidth + deltaX));
+      setRightPanelWidth(newWidth);
+    };
+
+    const onMouseUp = () => {
+      isDraggingRight.current = false;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  // Run test cases
+  const handleRun = async () => {
+    const code = currentCode;
+
+    if (isStarterOrEmpty(code, problem, selectedLanguage)) {
+      setExecutionResult({
+        status: "Need Solution",
+        message: "Write your solution before running the test cases.",
+        runtime: 0,
+        memory: 0,
+        passedCount: 0,
+        totalCount: (problem.testCases || []).length,
+        testCaseResults: [],
+        consoleOutput: "Write your solution before running the test cases.",
+      });
+      setActiveConsoleTab("result");
+      return;
+    }
+
     setIsRunning(true);
     setActiveConsoleTab("result");
 
-    setTimeout(() => {
-      setIsRunning(false);
-      setExecutionResult({
-        status: "Accepted",
+    try {
+      const result = await executeCodeSubmissionAsync({
+        code,
+        problem,
+        language: selectedLanguage,
         isSubmit: false,
-        runtime: 42,
-        memory: 16.4,
-        passedCount: problem.testCases.length,
-        totalCount: problem.testCases.length,
-        testCaseResults: problem.testCases.map((tc) => ({
-          input: tc.input,
-          expected: tc.expectedOutput,
-          actual: tc.expectedOutput,
-          passed: true,
-          isHidden: false,
-        })),
-        consoleOutput: "All sample test cases executed successfully.",
       });
-    }, 450);
+      setExecutionResult(result);
+    } catch {
+      setExecutionResult({
+        status: "Execution Error",
+        message: "Execution Error: Unable to execute the solution. Please check the backend service.",
+        runtime: 0,
+        memory: 0,
+        passedCount: 0,
+        totalCount: (problem.testCases || []).length,
+        testCaseResults: [],
+        consoleOutput: "Execution Error: Unable to execute the solution. Please check the backend service.",
+      });
+    } finally {
+      setIsRunning(false);
+    }
   };
 
-  // Submit evaluates visible + hidden test cases
-  const handleSubmit = (code: string) => {
+  // Submit test cases
+  const handleSubmit = async () => {
+    const code = currentCode;
+
+    if (isStarterOrEmpty(code, problem, selectedLanguage)) {
+      const totalTests = (problem.testCases || []).length + (problem.hiddenTestCases || []).length;
+      setExecutionResult({
+        status: "Need Solution",
+        message: "Write your solution before submitting.",
+        runtime: 0,
+        memory: 0,
+        passedCount: 0,
+        totalCount: totalTests,
+        testCaseResults: [],
+        consoleOutput: "Write your solution before submitting.",
+      });
+      setActiveConsoleTab("result");
+      return;
+    }
+
     setIsSubmitting(true);
     setActiveConsoleTab("result");
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      const totalTests = problem.testCases.length + (problem.hiddenTestCases?.length || 0);
-
-      setExecutionResult({
-        status: "Accepted",
+    try {
+      const result = await executeCodeSubmissionAsync({
+        code,
+        problem,
+        language: selectedLanguage,
         isSubmit: true,
-        runtime: 38,
-        memory: 15.9,
-        passedCount: totalTests,
-        totalCount: totalTests,
-        visiblePassed: problem.testCases.length,
-        visibleTotal: problem.testCases.length,
-        hiddenPassed: problem.hiddenTestCases?.length || 0,
-        hiddenTotal: problem.hiddenTestCases?.length || 0,
-        testCaseResults: problem.testCases.map((tc) => ({
-          input: tc.input,
-          expected: tc.expectedOutput,
-          actual: tc.expectedOutput,
-          passed: true,
-          isHidden: false,
-        })),
-        consoleOutput: `All ${totalTests} test cases passed. Placement evaluation certified.`,
       });
+      setExecutionResult(result);
 
-      // Add to submissions list
-      setSubmissionsList((prev) => [
-        {
-          id: prev.length + 1,
-          status: "Accepted",
-          language: selectedLanguage === "python3" ? "Python 3" : selectedLanguage,
-          runtime: "38 ms",
-          memory: "15.9 MB",
-          date: "Just now",
-          notes: "Beats 92.1% in runtime",
-        },
-        ...prev,
-      ]);
+      if (result.status === "Accepted") {
+        setSubmissionsList((prev) => [
+          {
+            id: prev.length + 1,
+            status: "Accepted",
+            language: selectedLanguage === "python3" ? "Python 3" : selectedLanguage,
+            runtime: `${result.runtime} ms`,
+            memory: `${result.memory} MB`,
+            date: "Just now",
+            notes: "Beats 92.4% in runtime",
+          },
+          ...prev,
+        ]);
 
-      if (onProblemSolved) {
-        onProblemSolved(problem.id);
+        if (onProblemSolved) {
+          onProblemSolved(problem.id);
+        }
       }
-    }, 700);
+    } catch {
+      setExecutionResult({
+        status: "Execution Error",
+        message: "Execution Error: Unable to execute the solution. Please check the backend service.",
+        runtime: 0,
+        memory: 0,
+        passedCount: 0,
+        totalCount: (problem.testCases || []).length + (problem.hiddenTestCases || []).length,
+        testCaseResults: [],
+        consoleOutput: "Execution Error: Unable to execute the solution. Please check the backend service.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  // Difficulty badge styling
+  const difficultyBadge =
+    problem.difficulty === "Easy"
+      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+      : problem.difficulty === "Medium"
+      ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+      : "bg-rose-500/10 text-rose-400 border-rose-500/20";
+
   return (
-    <div className="fixed inset-0 z-50 w-screen h-screen bg-background text-foreground flex flex-col overflow-hidden font-sans select-none">
+    <div className="fixed inset-0 z-50 w-screen h-screen bg-[#0B0F17] text-[#E2E8F0] flex flex-col overflow-hidden font-sans select-none">
       {/* =========================================================================
-          1. FULLSCREEN TOP WORKSPACE HEADER
+          1. TOP NAVIGATION HEADER (Clean, Professional, Focused)
          ========================================================================= */}
-      <header className="h-13 border-b border-border bg-card px-4 flex items-center justify-between shrink-0 z-20">
-        {/* Left: Back button, Problem Title & Difficulty */}
-        <div className="flex items-center gap-3 min-w-0">
+      <header className="h-12 border-b border-[#1E2638] bg-[#0E131F] px-4 flex items-center justify-between shrink-0 z-20">
+        {/* Left: Problem Navigation & Title */}
+        <div className="flex items-center gap-2.5 min-w-0">
           <button
+            type="button"
             onClick={onBackToList}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-border bg-secondary hover:bg-secondary/80 text-xs font-semibold text-foreground transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-[#94A3B8] hover:text-white hover:bg-[#161D2B] transition-colors"
+            title="Back to Problem List"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>Problems</span>
+            <span className="hidden sm:inline">Problems</span>
           </button>
 
-          <div className="flex items-center gap-2.5 truncate">
-            <h1 className="text-sm sm:text-base font-bold text-foreground truncate">
-              {problem.title}
-            </h1>
-            <span
-              className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold border shrink-0 ${
-                problem.difficulty === "Easy"
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                  : problem.difficulty === "Medium"
-                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                  : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
-              }`}
-            >
+          <div className="h-4 w-px bg-[#1E2638] hidden sm:block" />
+
+          {/* Prev / Next Problem Navigation */}
+          {(() => {
+            const currentIndex = PROBLEMS_DATASET.findIndex((p) => p.id === problem.id);
+            const prevProblem = currentIndex > 0 ? PROBLEMS_DATASET[currentIndex - 1] : null;
+            const nextProblem = currentIndex >= 0 && currentIndex < PROBLEMS_DATASET.length - 1 ? PROBLEMS_DATASET[currentIndex + 1] : null;
+
+            return (
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  disabled={!prevProblem}
+                  onClick={() => prevProblem && onSelectProblem?.(prevProblem.id)}
+                  className="p-1 rounded-lg text-[#94A3B8] hover:text-white hover:bg-[#161D2B] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                  title={prevProblem ? `Previous Problem: ${prevProblem.title}` : "First problem"}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  disabled={!nextProblem}
+                  onClick={() => nextProblem && onSelectProblem?.(nextProblem.id)}
+                  className="p-1 rounded-lg text-[#94A3B8] hover:text-white hover:bg-[#161D2B] transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                  title={nextProblem ? `Next Problem: ${nextProblem.title}` : "Last problem"}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })()}
+
+          <div className="flex items-center gap-2 min-w-0 truncate">
+            <span className="font-bold text-sm text-white truncate">{problem.title}</span>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${difficultyBadge}`}>
               {problem.difficulty}
             </span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsBookmarked((prev) => !prev)}
+            className="text-[#94A3B8] hover:text-[#A78BFA] transition-colors p-1 shrink-0"
+            title={isBookmarked ? "Remove Bookmark" : "Bookmark Problem"}
+          >
+            {isBookmarked ? (
+              <BookmarkCheck className="w-4 h-4 text-[#A78BFA]" />
+            ) : (
+              <Bookmark className="w-4 h-4" />
+            )}
+          </button>
         </div>
 
-        {/* Right: Run, Submit, Prep Guide toggle, Theme toggle */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Right: Run, Submit, AI Bot & Close Actions */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Run Button */}
           <button
-            onClick={() => handleRun("")}
+            type="button"
+            onClick={handleRun}
             disabled={isRunning || isSubmitting}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-border bg-secondary hover:bg-secondary/80 text-xs font-semibold text-foreground transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-[#28354D] bg-[#161D2B] hover:bg-[#1E2638] text-xs font-bold text-[#E2E8F0] transition-all shadow-sm disabled:opacity-50"
+            title="Run Code (Ctrl + Enter)"
           >
-            {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />}
+            {isRunning ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-[#A78BFA]" />
+            ) : (
+              <Play className="w-3.5 h-3.5 fill-current text-[#A78BFA]" />
+            )}
             <span>Run</span>
           </button>
 
+          {/* Submit Button */}
           <button
-            onClick={() => handleSubmit("")}
+            type="button"
+            onClick={handleSubmit}
             disabled={isRunning || isSubmitting}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-white text-xs font-bold transition-all pm-btn-gradient shadow-md disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-white text-xs font-bold transition-all shadow-md pm-btn-gradient disabled:opacity-50"
+            title="Submit Solution (Ctrl + Shift + Enter)"
           >
-            {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+            {isSubmitting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+            ) : (
+              <Send className="w-3.5 h-3.5 text-white" />
+            )}
             <span>Submit</span>
           </button>
 
-          <div className="w-px h-5 bg-border mx-1" />
+          <div className="h-4 w-px bg-[#1E2638] mx-0.5" />
 
+          {/* AI Bot Toggle Button */}
           <button
-            onClick={() => setActiveTab(activeTab === "prepGuide" ? "description" : "prepGuide")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
-              activeTab === "prepGuide"
-                ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/40"
-                : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary"
+            type="button"
+            onClick={() => setIsAiBotOpen((prev) => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+              isAiBotOpen
+                ? "bg-[#8B5CF6]/15 border-[#8B5CF6]/50 text-[#C4B5FD] shadow-sm shadow-[#8B5CF6]/20"
+                : "bg-[#141923] border-[#28354D] text-[#E2E8F0] hover:bg-[#1E2638] hover:border-[#8B5CF6]/40"
             }`}
+            title="Toggle AI Mentor"
           >
-            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span className="hidden sm:inline">Prep Guide</span>
+            <Bot className={`w-3.5 h-3.5 ${isAiBotOpen ? "text-[#A78BFA]" : "text-[#94A3B8]"}`} />
+            <span>AI Bot</span>
+            {isAiBotOpen && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
           </button>
 
+          {/* Exit Workspace (✕) Button */}
           <button
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            className="p-1.5 rounded-xl border border-border bg-card hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+            type="button"
+            onClick={onBackToList}
+            className="p-1.5 rounded-lg text-[#94A3B8] hover:text-white hover:bg-[#161D2B] transition-colors"
+            title="Exit Problem Workspace"
           >
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            <X className="w-4 h-4" />
           </button>
         </div>
       </header>
 
       {/* =========================================================================
-          2. MAIN 2-PANEL RESIZABLE WORKSPACE
+          2. MAIN WORKSPACE CONTENT AREA (Problem | Editor | AI Bot)
          ========================================================================= */}
-      <div className="flex-1 flex min-h-0 w-full relative overflow-hidden bg-background">
+      <div className="flex-1 flex min-h-0 overflow-hidden bg-[#0B0F17]">
         {/* =========================================================================
-            LEFT PANEL: Description / Submissions / Prep Guide
+            A. LEFT PANEL: Problem Description (Collapsed in Fullscreen Mode)
            ========================================================================= */}
-        <div
-          style={{ width: `${leftPanelWidth}px` }}
-          className="h-full flex flex-col bg-card border-r border-border shrink-0 overflow-hidden relative"
-        >
-          {/* Tabs Header */}
-          <div className="h-10 px-3 border-b border-border bg-secondary/30 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-1">
+        {!isFullScreen && (
+          <aside
+            aria-label="Problem Description"
+            style={{ width: `${leftPanelWidth}px` }}
+            className="h-full border-r border-[#1E2638] bg-[#0E131F] flex flex-col min-w-[300px] shrink-0 overflow-hidden select-text"
+          >
+            {/* Left Panel Tabs: Description | Hints | Solutions | Submissions */}
+            <div className="h-11 px-4 border-b border-[#1E2638] bg-[#10141D] flex items-center gap-5 shrink-0 select-none text-xs font-semibold">
               <button
-                onClick={() => setActiveTab("description")}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-                  activeTab === "description"
-                    ? "bg-card text-purple-700 dark:text-purple-300 border border-purple-500/40 shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                type="button"
+                onClick={() => setActiveLeftTab("description")}
+                className={`py-3 transition-colors relative ${
+                  activeLeftTab === "description"
+                    ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#8B5CF6]"
+                    : "text-[#94A3B8] hover:text-white"
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" /> Description
+                Description
               </button>
 
               <button
-                onClick={() => setActiveTab("submissions")}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-                  activeTab === "submissions"
-                    ? "bg-card text-purple-700 dark:text-purple-300 border border-purple-500/40 shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                type="button"
+                onClick={() => setActiveLeftTab("hints")}
+                className={`py-3 transition-colors relative ${
+                  activeLeftTab === "hints"
+                    ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#8B5CF6]"
+                    : "text-[#94A3B8] hover:text-white"
                 }`}
               >
-                <History className="w-3.5 h-3.5" /> Submissions
+                Hints
               </button>
 
               <button
-                onClick={() => setActiveTab("prepGuide")}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 ${
-                  activeTab === "prepGuide"
-                    ? "bg-card text-purple-700 dark:text-purple-300 border border-purple-500/40 shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                type="button"
+                onClick={() => setActiveLeftTab("solutions")}
+                className={`py-3 transition-colors relative ${
+                  activeLeftTab === "solutions"
+                    ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#8B5CF6]"
+                    : "text-[#94A3B8] hover:text-white"
                 }`}
               >
-                <Sparkles className="w-3.5 h-3.5" /> Prep Guide
+                Solutions
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveLeftTab("submissions")}
+                className={`py-3 transition-colors relative ${
+                  activeLeftTab === "submissions"
+                    ? "text-white after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-[#8B5CF6]"
+                    : "text-[#94A3B8] hover:text-white"
+                }`}
+              >
+                Submissions
               </button>
             </div>
-          </div>
 
-          {/* Left Panel Body Content */}
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-            {/* TAB 1: DESCRIPTION */}
-            {activeTab === "description" && (
-              <>
-                <div className="space-y-2">
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight font-display">
-                    {problem.title}
-                  </h2>
-
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="px-2.5 py-0.5 rounded-md bg-secondary border border-border text-foreground font-medium">
-                      {problem.topic}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-md bg-secondary border border-border text-muted-foreground">
-                      {problem.category}
-                    </span>
-
-                    {/* Company Tags */}
-                    {problem.companies?.map((c) => (
-                      <span
-                        key={c}
-                        className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-700 dark:text-purple-300 font-medium"
-                      >
-                        {c}
+            {/* Left Panel Body Content */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {activeLeftTab === "description" && (
+                <div className="space-y-5 text-xs sm:text-[13px] leading-relaxed text-[#CBD5E1]">
+                  {/* Title & Difficulty */}
+                  <div className="space-y-1">
+                    <h1 className="text-lg font-bold text-white tracking-tight">{problem.title}</h1>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold border ${difficultyBadge}`}>
+                        {problem.difficulty}
                       </span>
-                    ))}
+                      <span className="px-2.5 py-0.5 rounded-md bg-[#161D2B] border border-[#1E2638] text-[11px] font-medium text-[#CBD5E1]">
+                        {problem.topic}
+                      </span>
+                      {(problem.companies || []).slice(0, 3).map((c, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 rounded-md bg-[#141923] text-[#94A3B8] border border-[#1E2638] text-[11px]"
+                        >
+                          {c}
+                        </span>
+                      ))}
+                      {(problem.companies || []).length > 3 && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-[#141923] text-[#64748B] border border-[#1E2638] text-[10px]">
+                          +{problem.companies.length - 3}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Problem Description */}
-                <div className="text-[14px] sm:text-[15px] leading-relaxed text-foreground whitespace-pre-line space-y-4">
-                  {problem.description}
-                </div>
+                  {/* Problem Description text */}
+                  <div className="whitespace-pre-wrap font-sans text-[#CBD5E1] leading-relaxed">
+                    {problem.description}
+                  </div>
 
-                {/* Examples */}
-                <div className="space-y-4 pt-2">
-                  {problem.examples.map((ex, i) => (
-                    <div
-                      key={i}
-                      className="p-4 rounded-xl border border-border bg-secondary/30 space-y-2 font-mono text-xs"
-                    >
-                      <span className="font-bold text-foreground font-sans block text-xs">
-                        Example {i + 1}:
-                      </span>
-                      <div className="space-y-1 text-muted-foreground">
-                        <div>
-                          <strong className="text-foreground">Input: </strong>
-                          {ex.input}
+                  {/* Examples Section */}
+                  <div className="space-y-3 font-mono">
+                    {(problem.examples || []).map((ex, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-xl border border-[#1E2638] bg-[#141923] space-y-1.5 text-xs"
+                      >
+                        <div className="font-bold font-sans text-[11px] uppercase tracking-wider text-[#A78BFA]">
+                          Example {idx + 1}
                         </div>
                         <div>
-                          <strong className="text-foreground">Output: </strong>
-                          {ex.output}
+                          <span className="text-[#94A3B8]">Input: </span>
+                          <span className="text-white">{ex.input}</span>
+                        </div>
+                        <div>
+                          <span className="text-[#94A3B8]">Output: </span>
+                          <span className="text-emerald-400 font-bold">{ex.output}</span>
                         </div>
                         {ex.explanation && (
-                          <div>
-                            <strong className="text-foreground">Explanation: </strong>
-                            {ex.explanation}
+                          <div className="text-[11px] text-[#94A3B8] font-sans pt-1">
+                            <span>Explanation: {ex.explanation}</span>
                           </div>
                         )}
                       </div>
+                    ))}
+                  </div>
+
+                  {/* Constraints Section */}
+                  <div className="space-y-2 font-mono text-xs">
+                    <span className="font-bold text-white uppercase tracking-wider text-[11px] font-sans">
+                      Constraints:
+                    </span>
+                    <ul className="list-disc list-inside space-y-1 text-[#94A3B8]">
+                      {(problem.constraints || []).map((con, idx) => (
+                        <li key={idx}>
+                          <span className="text-[#CBD5E1]">{con}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Bottom Stats */}
+                  <div className="pt-4 border-t border-[#1E2638] flex items-center justify-between text-xs text-[#94A3B8] select-none font-sans">
+                    <div className="flex items-center gap-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHasLiked(!hasLiked);
+                          setLikeCount((prev) => (hasLiked ? prev - 1 : prev + 1));
+                        }}
+                        className={`flex items-center gap-1.5 transition-colors ${
+                          hasLiked ? "text-[#A78BFA]" : "hover:text-white"
+                        }`}
+                      >
+                        <ThumbsUp className="w-3.5 h-3.5" />
+                        <span>{(likeCount / 1000).toFixed(1)}K</span>
+                      </button>
+
+                      <div className="flex items-center gap-1.5 hover:text-white cursor-pointer">
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>112 Discussions</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <span>{problem.acceptanceRate || "64.8%"} Acceptance</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Hints Tab */}
+              {activeLeftTab === "hints" && (
+                <div className="space-y-3 text-xs">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">Progressive Hints</span>
+                  {(problem.hints || []).map((h, i) => (
+                    <div key={i} className="p-3.5 rounded-xl border border-[#1E2638] bg-[#141923] space-y-1">
+                      <span className="font-bold text-[#A78BFA]">Hint {i + 1}</span>
+                      <p className="text-[#CBD5E1] leading-relaxed">{h}</p>
                     </div>
                   ))}
                 </div>
+              )}
 
-                {/* Constraints */}
-                <div className="space-y-2 pt-2">
-                  <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                    Constraints
-                  </h3>
-                  <ul className="space-y-1.5 pl-5 list-disc text-xs text-muted-foreground font-mono leading-relaxed">
-                    {problem.constraints.map((c, i) => (
-                      <li key={i}>{c}</li>
+              {/* Solutions Tab */}
+              {activeLeftTab === "solutions" && (
+                <div className="space-y-3 text-xs">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">Optimal Approach</span>
+                  <div className="p-4 rounded-xl border border-[#1E2638] bg-[#141923] space-y-2 text-[#CBD5E1]">
+                    {(problem.optimalApproach || []).map((step, i) => (
+                      <p key={i}>
+                        <strong className="text-white">{i + 1}. </strong>
+                        {step}
+                      </p>
                     ))}
-                  </ul>
-                </div>
-              </>
-            )}
-
-            {/* TAB 2: SUBMISSIONS (Matching Reference Table Layout) */}
-            {activeTab === "submissions" && (
-              <div className="space-y-5">
-                {/* Mastery Summary Card */}
-                <div className="p-4 rounded-2xl border border-purple-500/20 bg-secondary/30 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-foreground">Candidate Problem Mastery</span>
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">{problem.mastery}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${problem.mastery}%` }} />
                   </div>
                 </div>
+              )}
 
-                {/* Clean Submissions Table */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-foreground">All Submissions</p>
-                    <span className="text-[11px] font-mono text-muted-foreground">{submissionsList.length} Total</span>
-                  </div>
-
-                  <div className="rounded-xl border border-border bg-card overflow-hidden shadow-sm">
+              {/* Submissions Tab */}
+              {activeLeftTab === "submissions" && (
+                <div className="space-y-3 text-xs">
+                  <div className="rounded-xl border border-[#1E2638] bg-[#141923] overflow-hidden">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-secondary/60 border-b border-border text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                      <thead className="bg-[#10141D] text-[#94A3B8] text-[10px] uppercase font-bold border-b border-[#1E2638]">
                         <tr>
                           <th className="py-2.5 px-3">Status</th>
-                          <th className="py-2.5 px-3">Language</th>
                           <th className="py-2.5 px-3">Runtime</th>
                           <th className="py-2.5 px-3">Memory</th>
-                          <th className="py-2.5 px-3">Notes</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-border/60">
-                        {submissionsList.map((sub, idx) => (
-                          <tr
-                            key={sub.id}
-                            className={`hover:bg-secondary/40 transition-colors ${
-                              idx % 2 === 0 ? "bg-card" : "bg-secondary/20"
-                            }`}
-                          >
-                            <td className="py-3 px-3">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                                <Check className="w-3 h-3" /> {sub.status}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 font-mono font-semibold text-purple-700 dark:text-purple-300">
-                              {sub.language}
-                            </td>
-                            <td className="py-3 px-3 font-mono text-foreground font-medium">
-                              {sub.runtime}
-                            </td>
-                            <td className="py-3 px-3 font-mono text-muted-foreground">
-                              {sub.memory}
-                            </td>
-                            <td className="py-3 px-3 text-[11px] text-muted-foreground">
-                              {sub.notes} &bull; <span className="text-[10px] opacity-75">{sub.date}</span>
-                            </td>
+                      <tbody className="divide-y divide-[#1E2638] font-mono">
+                        {submissionsList.map((s) => (
+                          <tr key={s.id} className="hover:bg-[#161D2B]">
+                            <td className="py-2.5 px-3 font-bold text-emerald-400">{s.status}</td>
+                            <td className="py-2.5 px-3 text-[#CBD5E1]">{s.runtime}</td>
+                            <td className="py-2.5 px-3 text-[#CBD5E1]">{s.memory}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </aside>
+        )}
 
-            {/* TAB 3: PREP GUIDE */}
-            {activeTab === "prepGuide" && (
-              <div className="space-y-5">
-                <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/10 space-y-1 text-xs">
-                  <p className="font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4" /> Interview Prep & Optimal Strategy
-                  </p>
-                  <p className="text-muted-foreground">
-                    Key thinking patterns, complexity benchmarks, and technical talking points for recruiter interviews.
-                  </p>
-                </div>
-
-                {/* Optimal Approach */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> Optimal Approach
-                  </h3>
-                  <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-2 text-xs text-muted-foreground">
-                    {problem.optimalApproach.map((step, idx) => (
-                      <p key={idx} className="leading-relaxed">
-                        <strong className="text-foreground">{idx + 1}. </strong>{step}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Complexity Analysis */}
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 rounded-xl border border-border bg-secondary/30 space-y-1">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Time Complexity</span>
-                    <p className="font-mono text-purple-700 dark:text-purple-300 font-bold">{problem.timeComplexity}</p>
-                  </div>
-                  <div className="p-3 rounded-xl border border-border bg-secondary/30 space-y-1">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Space Complexity</span>
-                    <p className="font-mono text-teal-600 dark:text-teal-400 font-bold">{problem.spaceComplexity}</p>
-                  </div>
-                </div>
-
-                {/* Progressive Hints */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <HelpCircle className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" /> Progressive Hints
-                  </h3>
-                  <div className="space-y-2">
-                    {problem.hints.map((hint, idx) => (
-                      <div key={idx} className="p-3 rounded-xl border border-border bg-card text-xs text-muted-foreground">
-                        <span className="font-bold text-foreground">Hint {idx + 1}: </span>
-                        {hint}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
+        {/* Resizable Divider Handle (Left to Center) */}
+        {!isFullScreen && (
+          <div
+            onMouseDown={startLeftResize}
+            className="w-1.5 bg-[#1E2638] hover:bg-[#8B5CF6]/60 cursor-col-resize transition-colors shrink-0 flex items-center justify-center group z-10"
+            title="Drag to resize panel"
+          >
+            <div className="h-8 w-0.5 rounded-full bg-[#64748B] group-hover:bg-[#A78BFA]" />
           </div>
-        </div>
-
-        {/* Resizable Divider Handle */}
-        <div
-          onMouseDown={startLeftResize}
-          className="w-1.5 bg-border hover:bg-purple-500/60 cursor-col-resize transition-colors shrink-0 flex items-center justify-center group z-10"
-        >
-          <div className="h-8 w-0.5 rounded-full bg-muted-foreground/40 group-hover:bg-purple-400" />
-        </div>
+        )}
 
         {/* =========================================================================
-            RIGHT PANEL: Monaco Code Editor + Test Console
+            B. CENTER PANEL: Code Editor & Testcase Workspace
            ========================================================================= */}
-        <div className="flex-1 min-w-[420px] h-full flex flex-col overflow-hidden">
+        <main aria-label="Code Workspace" className="flex-1 min-w-[360px] h-full flex flex-col overflow-hidden bg-[#141923]">
           <IDECodeEditor
             problem={problem}
             selectedLanguage={selectedLanguage}
-            onLanguageChange={setSelectedLanguage}
+            onLanguageChange={handleLanguageChange}
+            code={currentCode}
+            onCodeChange={(c) => setCurrentCode(c)}
             isRunning={isRunning}
             isSubmitting={isSubmitting}
             onRun={handleRun}
@@ -526,8 +686,40 @@ export function PracticeWorkspace({
             executionResult={executionResult}
             activeConsoleTab={activeConsoleTab}
             setActiveConsoleTab={setActiveConsoleTab}
+            isFullScreen={isFullScreen}
+            onToggleFullScreen={() => setIsFullScreen((prev) => !prev)}
           />
-        </div>
+        </main>
+
+        {/* =========================================================================
+            C. RIGHT PANEL: AI Mentor Sidebar (Conditional with NO Reserved Space when Closed)
+           ========================================================================= */}
+        {isAiBotOpen && (
+          <>
+            {/* Resizable Divider Handle (Center to Right) */}
+            <div
+              onMouseDown={startRightResize}
+              className="w-1.5 bg-[#1E2638] hover:bg-[#8B5CF6]/60 cursor-col-resize transition-colors shrink-0 flex items-center justify-center group z-10"
+              title="Drag to resize AI Mentor"
+            >
+              <div className="h-8 w-0.5 rounded-full bg-[#64748B] group-hover:bg-[#A78BFA]" />
+            </div>
+
+            <div
+              style={{ width: `${rightPanelWidth}px` }}
+              className="h-full bg-[#0E131F] flex flex-col min-w-[280px] shrink-0 overflow-hidden"
+            >
+              <AIMentorSidebar
+                problem={problem}
+                selectedLanguage={selectedLanguage}
+                currentCode={currentCode}
+                executionResult={executionResult}
+                onSelectProblem={onSelectProblem}
+                onClose={() => setIsAiBotOpen(false)}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

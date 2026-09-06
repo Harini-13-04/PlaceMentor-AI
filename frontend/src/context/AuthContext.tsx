@@ -120,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(authenticatedUser);
       setToken(data.access_token || "demo-jwt-token");
       return { success: true };
-    } catch (err: any) {
+    } catch {
       // Offline fallback
       const loggedInUser: User = {
         ...DEMO_USER,
@@ -190,7 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(newUser);
       setToken(data.access_token || "demo-jwt-token");
       return { success: true };
-    } catch (err: any) {
+    } catch {
       // Offline fallback
       const newUser: User = {
         id: `u-${Date.now()}`,
@@ -210,6 +210,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
+
   };
 
   const logout = () => {

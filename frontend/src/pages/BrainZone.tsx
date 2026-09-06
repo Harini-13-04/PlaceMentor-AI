@@ -78,12 +78,13 @@ export default function BrainZone() {
 
   // Timer loop
   useEffect(() => {
-    let interval: any;
+    let interval: NodeJS.Timeout | number;
     if (isTimerRunning) {
       interval = setInterval(() => setGameTimer((t) => t + 1), 1000);
     }
     return () => clearInterval(interval);
   }, [isTimerRunning]);
+
 
   // Start selected game in FULL-PAGE mode
   const handleLaunchGame = (game: BrainGameInfo) => {
@@ -236,7 +237,7 @@ export default function BrainZone() {
         return (
           <div className="w-full h-36 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
             {/* Overlapping Cards in glowing orange */}
-            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-500 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 dark:text-orange-400 shadow-sm">
               <Layers className="w-8 h-8 rotate-12" />
             </div>
           </div>
@@ -245,7 +246,7 @@ export default function BrainZone() {
         return (
           <div className="w-full h-36 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
             {/* Puzzle Piece in glowing emerald/green */}
-            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shadow-sm">
               <Puzzle className="w-8 h-8" />
             </div>
           </div>
@@ -254,7 +255,7 @@ export default function BrainZone() {
         return (
           <div className="w-full h-36 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
             {/* Brain in glowing pink/magenta */}
-            <div className="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-500 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center text-pink-600 dark:text-pink-400 shadow-sm">
               <BrainCircuit className="w-8 h-8" />
             </div>
           </div>
@@ -263,7 +264,7 @@ export default function BrainZone() {
         return (
           <div className="w-full h-36 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
             {/* Calculator in glowing amber */}
-            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm">
               <Calculator className="w-8 h-8" />
             </div>
           </div>
@@ -280,7 +281,7 @@ export default function BrainZone() {
       default:
         return (
           <div className="w-full h-36 rounded-t-2xl bg-secondary/60 flex items-center justify-center border-b border-border">
-            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-500 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-600 dark:text-cyan-400 shadow-sm">
               <Zap className="w-8 h-8" />
             </div>
           </div>

@@ -86,12 +86,13 @@ export default function Communication() {
   } | null>(null);
 
   useEffect(() => {
-    let interval: any;
+    let interval: NodeJS.Timeout | number;
     if (isRecording) {
       interval = setInterval(() => setSpeakingTimer((t) => t + 1), 1000);
     }
     return () => clearInterval(interval);
   }, [isRecording]);
+
 
   const handleToggleRecording = () => {
     if (!isRecording) {

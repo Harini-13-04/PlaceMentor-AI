@@ -4,7 +4,7 @@ interface RequestOptions extends RequestInit {
   token?: string | null;
 }
 
-export async function apiRequest<T = any>(
+export async function apiRequest<T = unknown>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
@@ -49,7 +49,9 @@ export async function apiRequest<T = any>(
         if (typeof errorData.detail === "string") {
           errorMessage = errorData.detail;
         } else if (Array.isArray(errorData.detail)) {
-          errorMessage = errorData.detail.map((d: any) => d.msg || JSON.stringify(d)).join(", ");
+          errorMessage = errorData.detail
+            .map((d: { msg?: string }) => d.msg || JSON.stringify(d))
+            .join(", ");
         }
       } else if (errorData?.message) {
         errorMessage = errorData.message;
@@ -57,6 +59,7 @@ export async function apiRequest<T = any>(
     } catch {
       // Body is not JSON
     }
+
     const error = new Error(errorMessage) as Error & { status?: number };
     error.status = response.status;
     throw error;

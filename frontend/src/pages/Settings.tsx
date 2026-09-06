@@ -2,18 +2,11 @@ import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import {
-  Settings as SettingsIcon,
   User,
   Sun,
   Moon,
-  Lock,
-  Bell,
   LogOut,
   Check,
-  Shield,
-  Eye,
-  EyeOff,
-  Sparkles,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -26,13 +19,8 @@ export default function Settings() {
   const [department, setDepartment] = useState(user?.department || "Computer Science & Engineering");
   const [college, setCollege] = useState(user?.college || "SRM Institute of Science and Technology");
 
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  const [dailyReminders, setDailyReminders] = useState(true);
 
   const handleSaveAccount = (e: React.FormEvent) => {
     e.preventDefault();
