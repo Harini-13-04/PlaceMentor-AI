@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
+from app.api.resumes import router as resumes_router
 from routes.profile import router as profile_router
 from routes.execution import router as execution_router
 from dotenv import load_dotenv
@@ -81,6 +82,7 @@ async def get_status_checks():
 # Include feature routers in the /api router
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
+api_router.include_router(resumes_router)
 api_router.include_router(profile_router)
 api_router.include_router(execution_router)
 

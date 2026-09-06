@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Header, status
+
 from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
@@ -6,6 +7,7 @@ from app.schemas.auth import (
     UserResponse,
     ChangePasswordRequest,
 )
+
 from app.services.auth_service import (
     create_user,
     authenticate_user,
@@ -22,10 +24,12 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: RegisterRequest):
     display_name = request.name or request.full_name or ""
-    user = await create_user(
-        name=display_name,
-        full_name=display_name,
-        email=request.email,
+
+user = await create_user(
+    name=display_name,
+    full_name=display_name,
+    email=request.email,
+
         password=request.password,
         college=request.college or "",
         department=request.department or "",

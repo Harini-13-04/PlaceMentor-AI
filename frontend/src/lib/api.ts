@@ -38,6 +38,10 @@ export async function apiRequest<T = unknown>(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem("pm_token");
+      localStorage.removeItem("placementor_token");
+    }
     let errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
     try {
       const errorData = await response.json();
