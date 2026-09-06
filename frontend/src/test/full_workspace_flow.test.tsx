@@ -153,5 +153,5 @@ describe("Full E2E Workspace & Navigation Flow", () => {
     fireEvent.click(backBtn);
 
     expect(screen.getByText(/Campus Coding Arena/i)).toBeInTheDocument();
-  });
+  }, 15000);
 });

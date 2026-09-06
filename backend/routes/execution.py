@@ -526,7 +526,32 @@ def execute_python_code(code: str, problem_id: str, test_cases: List[TestCaseIte
 
 
 def execute_javascript_code(code: str, problem_id: str, test_cases: List[TestCaseItem]) -> Dict[str, Any]:
-    """Executes JavaScript using real Node.js subprocess."""
+    """Executes JavaScript and TypeScript using real Node.js subprocess."""
+    if not shutil.which("node"):
+        msg = "Node.js runtime is not available on this system."
+        return {
+            "status": "Compilation Error",
+            "message": msg,
+            "runtime": 0,
+            "testCaseResults": [
+                {
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": "Node.js runtime not found",
+                    "passed": False,
+                    "reason": "Runtime Unavailable",
+                    "isHidden": tc.isHidden,
+                }
+                for tc in test_cases
+            ],
+            "consoleOutput": msg,
+        }
+
+    clean_code = code
+    # Clean TypeScript type annotations if TypeScript solution provided
+    clean_code = re.sub(r':\s*[a-zA-Z0-9_<>[\]|,\s]+(?=[,)])', '', clean_code)
+    clean_code = re.sub(r'\)\s*:\s*[a-zA-Z0-9_<>[\]|\s]+\s*\{', ') {', clean_code)
+
     js_runner = f"""
     const testCases = {json.dumps([tc.model_dump() for tc in test_cases])};
     const problemId = {json.dumps(problem_id)};
@@ -541,7 +566,7 @@ def execute_javascript_code(code: str, problem_id: str, test_cases: List[TestCas
     }}
     
     // User Code
-    {code}
+    {clean_code}
     
     // Find callable
     let targetFn = null;
@@ -692,6 +717,26 @@ def execute_javascript_code(code: str, problem_id: str, test_cases: List[TestCas
 
 def execute_java_code(code: str, problem_id: str, test_cases: List[TestCaseItem]) -> Dict[str, Any]:
     """Compiles and executes Java code using javac and java with dynamic test execution."""
+    if not shutil.which("javac") or not shutil.which("java"):
+        msg = "Java runtime (javac/java) is not available on this system."
+        return {
+            "status": "Compilation Error",
+            "message": msg,
+            "runtime": 0,
+            "testCaseResults": [
+                {
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": "Java runtime not found",
+                    "passed": False,
+                    "reason": "Runtime Unavailable",
+                    "isHidden": tc.isHidden,
+                }
+                for tc in test_cases
+            ],
+            "consoleOutput": msg,
+        }
+
     temp_dir = tempfile.mkdtemp()
     try:
         test_inputs_java = ", ".join(json.dumps(tc.input) for tc in test_cases)
@@ -921,9 +966,29 @@ public class Main {{
 
 def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem], is_c: bool = False) -> Dict[str, Any]:
     """Compiles and executes C/C++ code using gcc/g++."""
+    compiler = "gcc" if is_c else "g++"
+    if not shutil.which(compiler):
+        msg = f"{compiler.upper()} compiler is not available on this system."
+        return {
+            "status": "Compilation Error",
+            "message": msg,
+            "runtime": 0,
+            "testCaseResults": [
+                {
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": f"{compiler} not found",
+                    "passed": False,
+                    "reason": "Compiler Unavailable",
+                    "isHidden": tc.isHidden,
+                }
+                for tc in test_cases
+            ],
+            "consoleOutput": msg,
+        }
+
     temp_dir = tempfile.mkdtemp()
     ext = ".c" if is_c else ".cpp"
-    compiler = "gcc" if is_c else "g++"
     flags = ["-std=c11"] if is_c else ["-std=c++17"]
 
     src_file = os.path.join(temp_dir, f"solution{ext}")
@@ -1029,13 +1094,23 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
                     "reason": reason,
                     "isHidden": tc.isHidden,
                 })
+            elif line.startswith("RUNTIME_ERR::"):
+                err_msg = line.replace("RUNTIME_ERR::", "").strip()
+                test_results.append({
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": f"RuntimeError: {err_msg}",
+                    "passed": False,
+                    "reason": f"Runtime Error: {err_msg}",
+                    "isHidden": tc.isHidden,
+                })
             else:
                 test_results.append({
                     "input": tc.input,
                     "expected": tc.expectedOutput,
-                    "actual": tc.expectedOutput,
-                    "passed": True,
-                    "reason": "Passed",
+                    "actual": line if line else "No output produced",
+                    "passed": False,
+                    "reason": "Execution did not produce expected output",
                     "isHidden": tc.isHidden,
                 })
 
@@ -1164,6 +1239,234 @@ def execute_sql_code(code: str, problem_id: str, test_cases: List[TestCaseItem])
         conn.close()
 
 
+def execute_csharp_code(code: str, problem_id: str, test_cases: List[TestCaseItem]) -> Dict[str, Any]:
+    """Compiles and executes C# code using Windows csc.exe compiler."""
+    csc_path = shutil.which("csc") or r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+    if not os.path.exists(csc_path) and not shutil.which("csc"):
+        return {
+            "status": "Compilation Error",
+            "message": "C# compiler (csc.exe) is not available on this system.",
+            "runtime": 0,
+            "testCaseResults": [
+                {
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": "C# compiler not found",
+                    "passed": False,
+                    "reason": "Compiler Unavailable",
+                    "isHidden": tc.isHidden,
+                }
+                for tc in test_cases
+            ],
+            "consoleOutput": "C# compiler not found.",
+        }
+
+    temp_dir = tempfile.mkdtemp()
+    src_file = os.path.join(temp_dir, "Solution.cs")
+    exe_file = os.path.join(temp_dir, "Solution.exe")
+
+    try:
+        test_inputs_cs = ", ".join(json.dumps(tc.input) for tc in test_cases)
+        cs_harness = f"""
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Text.RegularExpressions;
+
+{code}
+
+public class PlaceMentorRunner {{
+    public static string Serialize(object obj) {{
+        if (obj == null) return "null";
+        if (obj is int[]) {{
+            return "[" + string.Join(",", (int[])obj) + "]";
+        }}
+        if (obj is string[]) {{
+            return "[\\"" + string.Join("\\",\\"", (string[])obj) + "\\"]";
+        }}
+        if (obj is bool) {{
+            return (bool)obj ? "true" : "false";
+        }}
+        return obj.ToString();
+    }}
+
+    public static object ParseArg(string str, Type targetType) {{
+        str = str.Trim();
+        if (targetType == typeof(int)) return int.Parse(str);
+        if (targetType == typeof(long)) return long.Parse(str);
+        if (targetType == typeof(double)) return double.Parse(str);
+        if (targetType == typeof(bool)) return bool.Parse(str);
+        if (targetType == typeof(string)) {{
+            if (str.StartsWith("\\"") && str.EndsWith("\\"") && str.Length >= 2) return str.Substring(1, str.Length - 2);
+            return str;
+        }}
+        if (targetType == typeof(int[])) {{
+            string s = Regex.Replace(str, @"[\\[\\]\\s]", "");
+            if (string.IsNullOrEmpty(s)) return new int[0];
+            string[] parts = s.Split(',');
+            int[] arr = new int[parts.Length];
+            for (int i = 0; i < parts.Length; i++) arr[i] = int.Parse(parts[i]);
+            return arr;
+        }}
+        return str;
+    }}
+
+    public static void Main() {{
+        string[] testInputs = new string[] {{ {test_inputs_cs} }};
+        string problemId = {json.dumps(problem_id)};
+
+        try {{
+            Type solType = typeof(Solution);
+            object sol = Activator.CreateInstance(solType);
+            MethodInfo targetMethod = null;
+            foreach (MethodInfo m in solType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)) {{
+                targetMethod = m;
+                break;
+            }}
+
+            if (targetMethod == null) {{
+                Console.WriteLine("FATAL_ERR::No solution method found in Solution class");
+                return;
+            }}
+
+            ParameterInfo[] parameters = targetMethod.GetParameters();
+
+            for (int t = 0; t < testInputs.Length; t++) {{
+                string inputStr = testInputs[t].Trim();
+                string[] parts = Regex.Split(inputStr, @",\\s*(?=[a-zA-Z_][a-zA-Z0-9_]*\\s*=)");
+                object[] invokeArgs = new object[parameters.Length];
+
+                for (int i = 0; i < parameters.Length && i < parts.Length; i++) {{
+                    string part = parts[i];
+                    int eqIdx = part.IndexOf('=');
+                    string valStr = eqIdx >= 0 ? part.Substring(eqIdx + 1).Trim() : part.Trim();
+                    invokeArgs[i] = ParseArg(valStr, parameters[i].ParameterType);
+                }}
+
+                try {{
+                    object actual = targetMethod.Invoke(sol, invokeArgs);
+                    Console.WriteLine("RESULT::" + Serialize(actual));
+                }} catch (TargetInvocationException tie) {{
+                    Exception cause = tie.InnerException != null ? tie.InnerException : tie;
+                    Console.WriteLine("RUNTIME_ERR::" + cause.GetType().Name + ": " + cause.Message);
+                }}
+            }}
+        }} catch (Exception ex) {{
+            Console.WriteLine("FATAL_ERR::" + ex.Message);
+        }}
+    }}
+}}
+"""
+        with open(src_file, "w", encoding="utf-8") as f:
+            f.write(cs_harness)
+
+        comp_proc = subprocess.run(
+            [csc_path, "/nologo", f"/out:{exe_file}", src_file],
+            cwd=temp_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=10,
+        )
+
+        if comp_proc.returncode != 0:
+            err = comp_proc.stdout.replace(temp_dir, "").strip() or comp_proc.stderr.strip()
+            return {
+                "status": "Compilation Error",
+                "message": err,
+                "runtime": 0,
+                "testCaseResults": [
+                    {
+                        "input": tc.input,
+                        "expected": tc.expectedOutput,
+                        "actual": err,
+                        "passed": False,
+                        "reason": "Compilation Error",
+                        "isHidden": tc.isHidden,
+                    }
+                    for tc in test_cases
+                ],
+                "consoleOutput": err,
+            }
+
+        start_time = time.perf_counter()
+        run_proc = subprocess.run(
+            [exe_file],
+            cwd=temp_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+        duration_ms = max(20, int((time.perf_counter() - start_time) * 1000))
+
+        lines = run_proc.stdout.strip().split("\n")
+        test_results = []
+        has_runtime = False
+
+        for idx, tc in enumerate(test_cases):
+            line = lines[idx] if idx < len(lines) else "RUNTIME_ERR::No output produced"
+            if line.startswith("RESULT::"):
+                act_str = line.replace("RESULT::", "").strip()
+                passed, reason = compare_actual_expected(act_str, tc.expectedOutput, problem_id)
+                test_results.append({
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": act_str,
+                    "passed": passed,
+                    "reason": reason,
+                    "isHidden": tc.isHidden,
+                })
+            elif line.startswith("RUNTIME_ERR::"):
+                has_runtime = True
+                err_msg = line.replace("RUNTIME_ERR::", "").strip()
+                test_results.append({
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": f"RuntimeError: {err_msg}",
+                    "passed": False,
+                    "reason": f"Runtime Error: {err_msg}",
+                    "isHidden": tc.isHidden,
+                })
+            else:
+                test_results.append({
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": line,
+                    "passed": False,
+                    "reason": "Execution failure",
+                    "isHidden": tc.isHidden,
+                })
+
+        passed_count = sum(1 for t in test_results if t["passed"])
+        all_passed = passed_count == len(test_results)
+
+        return {
+            "status": "Accepted" if all_passed else ("Runtime Error" if has_runtime else "Wrong Answer"),
+            "runtime": duration_ms,
+            "testCaseResults": test_results,
+            "consoleOutput": "All C# test cases verified." if all_passed else "Test verification failed.",
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "status": "Time Limit Exceeded",
+            "message": "Time Limit Exceeded during C# execution.",
+            "runtime": 5000,
+            "testCaseResults": [],
+            "consoleOutput": "Time Limit Exceeded",
+        }
+    except Exception as e:
+        return {
+            "status": "Compilation Error",
+            "message": str(e),
+            "runtime": 0,
+            "testCaseResults": [],
+            "consoleOutput": str(e),
+        }
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def is_starter_or_empty(code: str) -> bool:
     if not code:
         return True
@@ -1256,7 +1559,7 @@ async def execute_code(req: ExecutionRequest):
     # 3. Select Language Runner
     if lang in ("python3", "python", "numpy"):
         res = execute_python_code(code, problem_id, test_cases)
-    elif lang in ("javascript",):
+    elif lang in ("javascript", "typescript", "ts", "js"):
         res = execute_javascript_code(code, problem_id, test_cases)
     elif lang in ("java", "java17"):
         res = execute_java_code(code, problem_id, test_cases)
@@ -1264,6 +1567,8 @@ async def execute_code(req: ExecutionRequest):
         res = execute_cpp_code(code, problem_id, test_cases, is_c=False)
     elif lang in ("c",):
         res = execute_cpp_code(code, problem_id, test_cases, is_c=True)
+    elif lang in ("csharp", "cs", "c#"):
+        res = execute_csharp_code(code, problem_id, test_cases)
     elif lang in ("sql",):
         res = execute_sql_code(code, problem_id, test_cases)
     else:

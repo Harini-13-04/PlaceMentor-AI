@@ -30,12 +30,14 @@ export interface Problem {
     python3: string;
     python: string;
     java: string;
-    java17: string;
-    sql: string;
-    numpy: string;
+    java17?: string;
+    sql?: string;
+    numpy?: string;
     c: string;
     cpp: string;
     javascript: string;
+    typescript?: string;
+    csharp?: string;
   };
   testCases: TestCase[];
   hiddenTestCases: TestCase[];
@@ -52,16 +54,65 @@ function makeStarter(
   jsParams: string,
   sqlQuery: string = ""
 ) {
+  const capFuncName = funcName.charAt(0).toUpperCase() + funcName.slice(1);
+  const cleanJsParams = jsParams.replace(/:\s*[a-zA-Z<>[\]_, ]+/g, "").replace(/[a-zA-Z<>[\]_]+\s*:\s*/g, "");
+
+  // TypeScript param signatures from jsParams
+  const tsParams = jsParams.includes(":")
+    ? jsParams
+    : paramsPy
+        .replace(/List\[int\]/g, "number[]")
+        .replace(/List\[str\]/g, "string[]")
+        .replace(/List\[bool\]/g, "boolean[]")
+        .replace(/List\[List\[int\]\]/g, "number[][]")
+        .replace(/int/g, "number")
+        .replace(/str/g, "string")
+        .replace(/bool/g, "boolean");
+
+  const tsReturn = returnPy
+    .replace(/List\[int\]/g, "number[]")
+    .replace(/List\[str\]/g, "string[]")
+    .replace(/List\[bool\]/g, "boolean[]")
+    .replace(/List\[List\[int\]\]/g, "number[][]")
+    .replace(/int/g, "number")
+    .replace(/str/g, "string")
+    .replace(/bool/g, "boolean")
+    .replace(/None/g, "void");
+
+  // C params and return
+  const cRet = cppRet === "vector<int>" ? "int*" : cppRet === "vector<string>" ? "char**" : cppRet === "vector<bool>" ? "bool*" : cppRet;
+  let cParams = paramsCpp;
+  if (paramsCpp.includes("vector<int>& nums, int target")) {
+    cParams = "int* nums, int numsSize, int target, int* returnSize";
+  } else if (paramsCpp.includes("vector<int>& nums")) {
+    cParams = "int* nums, int numsSize";
+  } else if (paramsCpp.includes("string s, string t")) {
+    cParams = "char* s, char* t";
+  } else if (paramsCpp.includes("string s")) {
+    cParams = "char* s";
+  }
+
+  // Untyped Python parameters for legacy Python template
+  const cleanPyParams = paramsPy
+    .split(",")
+    .map((p) => {
+      const colonIdx = p.indexOf(":");
+      return colonIdx >= 0 ? p.substring(0, colonIdx).trim() : p.trim();
+    })
+    .join(", ");
+
   return {
     python3: `class Solution:\n    def ${funcName}(self, ${paramsPy}) -> ${returnPy}:\n        # Write your solution below\n        \n`,
-    python: `def ${funcName}(${paramsPy}):\n    # Write your solution below\n    \n`,
-    java: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your solution below\n        \n    }\n}\n`,
-    java17: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        // Write your solution below\n        \n    }\n}\n`,
+    python: `class Solution(object):\n    def ${funcName}(self, ${cleanPyParams}):\n        # Write your solution below\n        \n`,
+    java: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        \n    }\n}\n`,
+    java17: `class Solution {\n    public ${javaRet} ${funcName}(${paramsJava}) {\n        \n    }\n}\n`,
     sql: sqlQuery || "-- SQL is not supported for this algorithmic problem\n",
     numpy: `import numpy as np\n\ndef ${funcName}(arr):\n    # Write your vectorized NumPy solution\n    \n`,
-    c: `${cppRet === "vector<int>" ? "int*" : cppRet} ${funcName}(${paramsCpp}) {\n    // Write your solution below\n    \n}\n`,
-    cpp: `class Solution {\npublic:\n    ${cppRet} ${funcName}(${paramsCpp}) {\n        // Write your solution below\n        \n    }\n};\n`,
-    javascript: `/**\n * @param {${jsParams}}\n * @return {${returnPy}}\n */\nfunction ${funcName}(${jsParams.replace(/: [a-zA-Z<>[\\], ]+/g, "")}) {\n    // Write your solution below\n    \n}\n`,
+    c: `/**\n * Return an array of size *returnSize.\n */\n${cRet} ${funcName}(${cParams}) {\n    \n}\n`,
+    cpp: `class Solution {\npublic:\n    ${cppRet} ${funcName}(${paramsCpp}) {\n        \n    }\n};\n`,
+    javascript: `/**\n * @param {${jsParams}}\n * @return {${returnPy}}\n */\nvar ${funcName} = function(${cleanJsParams}) {\n    \n};\n`,
+    typescript: `function ${funcName}(${tsParams}): ${tsReturn} {\n    \n}\n`,
+    csharp: `public class Solution {\n    public ${javaRet} ${capFuncName}(${paramsJava}) {\n        \n    }\n}\n`,
   };
 }
 
@@ -70,11 +121,39 @@ export function getStarterCode(problem: Problem, lang: string): string {
   if (codes && typeof codes[lang] === "string" && codes[lang].length > 0) {
     return codes[lang];
   }
+
+  // Dynamic fallback generator if a language is not pre-baked in problem
+  const pyCode = codes?.python3 || codes?.python || "";
+  const match = pyCode.match(/def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)/);
+  const funcName = match ? match[1] : "solution";
+  const capFuncName = funcName.charAt(0).toUpperCase() + funcName.slice(1);
+
+  if (lang === "csharp") {
+    return `public class Solution {\n    public int[] ${capFuncName}(int[] nums, int target) {\n        \n    }\n}\n`;
+  }
+  if (lang === "typescript") {
+    return `function ${funcName}(nums: number[], target: number): number[] {\n    \n}\n`;
+  }
+  if (lang === "javascript") {
+    return `/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar ${funcName} = function(nums, target) {\n    \n};\n`;
+  }
+  if (lang === "c") {
+    return `/**\n * Return an array of size *returnSize.\n */\nint* ${funcName}(int* nums, int numsSize, int target, int* returnSize) {\n    \n}\n`;
+  }
+  if (lang === "cpp") {
+    return `class Solution {\npublic:\n    vector<int> ${funcName}(vector<int>& nums, int target) {\n        \n    }\n};\n`;
+  }
+  if (lang === "java") {
+    return `class Solution {\n    public int[] ${funcName}(int[] nums, int target) {\n        \n    }\n}\n`;
+  }
+  if (lang === "python") {
+    return `class Solution(object):\n    def ${funcName}(self, nums, target):\n        # Write your solution below\n        \n`;
+  }
+  if (lang === "python3") {
+    return `class Solution:\n    def ${funcName}(self, nums: List[int], target: int) -> List[int]:\n        # Write your solution below\n        \n`;
+  }
   if (lang === "sql") {
     return "-- SQL is not supported for this problem\n";
-  }
-  if (lang === "python3" || lang === "python" || lang === "numpy") {
-    return `# Write your ${lang} solution below\n`;
   }
   return `// Write your ${lang} solution below\n`;
 }
@@ -141,8 +220,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     spaceComplexity: "O(n) — auxiliary hash map storage.",
     starterCodes: makeStarter(
       "twoSum",
-      "nums: list[int], target: int",
-      "list[int]",
+      "nums: List[int], target: int",
+      "List[int]",
       "int[]",
       "int[] nums, int target",
       "vector<int>",

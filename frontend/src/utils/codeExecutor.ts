@@ -5,7 +5,8 @@
  */
 
 import { Problem, TestCase } from "@/data/problems";
-import { SupportedLanguage, ExecutionResult } from "@/components/practice/IDECodeEditor";
+import { ExecutionResult } from "@/components/practice/IDECodeEditor";
+import { SupportedLanguage, getBackendLanguageId } from "@/config/languages";
 import { API_URL } from "@/config";
 
 export interface ExecutionParams {
@@ -49,7 +50,8 @@ export function isStarterOrEmpty(
   // Strip placeholder tokens
   const cleanTokens = (s: string) =>
     s
-      .replace(/(Write\s+your\s+solution\s+below|Write\s+your\s+vectorized\s+NumPy\s+solution|TODO|\bpass\b)/gi, "")
+      .toLowerCase()
+      .replace(/(write\s+your\s+solution\s+below|write\s+your\s+vectorized\s+numpy\s+solution|todo|\bpass\b)/gi, "")
       .replace(/[\s;{}()[\]:,->]/g, "");
 
   const tokenUser = cleanTokens(cleanUser);
@@ -232,7 +234,7 @@ export async function executeCodeSubmissionAsync(params: ExecutionParams): Promi
       },
       body: JSON.stringify({
         code,
-        language,
+        language: getBackendLanguageId(language),
         problemId: problem.id,
         testCases: testCases.map((tc) => ({
           input: tc.input,

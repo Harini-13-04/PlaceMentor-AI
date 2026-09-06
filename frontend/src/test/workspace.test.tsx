@@ -22,6 +22,57 @@ vi.mock("@uiw/react-codemirror", () => ({
   ),
 }));
 
+// Mock executeCodeSubmissionAsync for isolated component testing
+vi.mock("@/utils/codeExecutor", async () => {
+  const actual = await vi.importActual<any>("@/utils/codeExecutor");
+  return {
+    ...actual,
+    executeCodeSubmissionAsync: vi.fn(async ({ code, isSubmit }) => {
+      if (code.includes("return [0, 0]")) {
+        return {
+          status: "Wrong Answer",
+          isSubmit,
+          message: null,
+          runtime: 18,
+          memory: 14.8,
+          passedCount: 0,
+          totalCount: isSubmit ? 7 : 3,
+          testCaseResults: [
+            {
+              input: "nums = [2,7,11,15], target = 9",
+              expected: "[0,1]",
+              actual: "[0,0]",
+              passed: false,
+              reason: "Output did not match expected value",
+              isHidden: false,
+            },
+          ],
+          consoleOutput: "1 test case failed",
+        };
+      }
+      return {
+        status: "Accepted",
+        isSubmit,
+        message: null,
+        runtime: 22,
+        memory: 15.2,
+        passedCount: isSubmit ? 7 : 3,
+        totalCount: isSubmit ? 7 : 3,
+        testCaseResults: [
+          {
+            input: "nums = [2,7,11,15], target = 9",
+            expected: "[0,1]",
+            actual: "[0,1]",
+            passed: true,
+            isHidden: false,
+          },
+        ],
+        consoleOutput: "All test cases passed",
+      };
+    }),
+  };
+});
+
 describe("PracticeWorkspace UI Component", () => {
   const problem = getProblemById("two-sum")!;
 
@@ -115,5 +166,70 @@ describe("PracticeWorkspace UI Component", () => {
 
     fireEvent.change(select, { target: { value: "java" } });
     expect(select.value).toBe("java");
+  });
+
+  it("automatically expands the bottom console and switches to Test Result tab when Run is clicked", async () => {
+    render(
+      <PracticeWorkspace
+        problem={problem}
+        onBackToList={vi.fn()}
+      />
+    );
+
+    // Initially on Testcases tab
+    expect(screen.getByText("Input Parameters")).toBeInTheDocument();
+
+    // Collapse the console manually
+    const collapseBtn = screen.getByTitle("Collapse Console");
+    fireEvent.click(collapseBtn);
+
+    // Once collapsed, the content inside is hidden
+    expect(screen.queryByText("Input Parameters")).not.toBeInTheDocument();
+
+    // Enter solution code
+    const textarea = screen.getByTestId("codemirror-textarea") as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: {
+        value: `class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        return [0, 0]`,
+      },
+    });
+
+    // Click Run
+    const runBtn = screen.getByRole("button", { name: /run/i });
+    fireEvent.click(runBtn);
+
+    // The console must automatically expand and switch to Test Result tab showing results
+    const wrongAnswer = await screen.findByText("Wrong Answer");
+    expect(wrongAnswer).toBeInTheDocument();
+    expect(screen.getByText("Your Output:")).toBeInTheDocument();
+  });
+
+  it("automatically expands the bottom console and switches to Test Result tab when Submit is clicked", async () => {
+    render(
+      <PracticeWorkspace
+        problem={problem}
+        onBackToList={vi.fn()}
+      />
+    );
+
+    // Collapse console first
+    const collapseBtn = screen.getByTitle("Collapse Console");
+    fireEvent.click(collapseBtn);
+
+    // Enter correct code
+    const textarea = screen.getByTestId("codemirror-textarea") as HTMLTextAreaElement;
+    fireEvent.change(textarea, {
+      target: {
+        value: `class Solution:\n    def twoSum(self, nums: list[int], target: int) -> list[int]:\n        seen = {}\n        for i, n in enumerate(nums):\n            diff = target - n\n            if diff in seen:\n                return [seen[diff], i]\n            seen[n] = i\n        return []`,
+      },
+    });
+
+    // Click Submit
+    const submitBtn = screen.getByRole("button", { name: /submit/i });
+    fireEvent.click(submitBtn);
+
+    // The console must automatically expand and display Accepted result immediately
+    const accepted = await screen.findByText("Accepted");
+    expect(accepted).toBeInTheDocument();
   });
 });
