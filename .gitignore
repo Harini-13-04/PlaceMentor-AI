@@ -49,3 +49,6 @@ backend/uploads/
 
 # Local backup archives
 *.zip
+
+# Vite temp timestamp files
+*.timestamp-*.mjs

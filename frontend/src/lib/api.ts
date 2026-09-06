@@ -10,7 +10,10 @@ export async function apiRequest<T = any>(
 ): Promise<T> {
   const { token, headers: customHeaders, ...restOptions } = options;
 
-  const storedToken = token !== undefined ? token : localStorage.getItem("placementor_token");
+  const storedToken =
+    token !== undefined
+      ? token
+      : localStorage.getItem("pm_token") || localStorage.getItem("placementor_token");
 
   const headers: HeadersInit = {
     ...customHeaders,
@@ -35,6 +38,10 @@ export async function apiRequest<T = any>(
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem("pm_token");
+      localStorage.removeItem("placementor_token");
+    }
     let errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
     try {
       const errorData = await response.json();

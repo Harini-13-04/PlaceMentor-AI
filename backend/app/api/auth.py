@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import status,APIRouter, HTTPException, Depends, Header
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
 from app.services.auth_service import create_user, authenticate_user
 from app.core.security import create_access_token, decode_access_token
@@ -11,8 +11,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: RegisterRequest):
     user = await create_user(
-        name=name,
+        name=request.name,
         email=request.email,
+
         password=request.password,
         college=request.college or "",
         department=request.department or "",

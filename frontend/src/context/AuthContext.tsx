@@ -72,8 +72,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (token) {
       localStorage.setItem("pm_token", token);
+      localStorage.setItem("placementor_token", token);
     } else {
       localStorage.removeItem("pm_token");
+      localStorage.removeItem("placementor_token");
     }
   }, [token]);
 
@@ -215,6 +217,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     localStorage.removeItem("pm_user");
     localStorage.removeItem("pm_token");
+    localStorage.removeItem("placementor_token");
   };
 
   const updateUser = (userData: Partial<User>) => {

@@ -1,7 +1,8 @@
-from passlib.context import CryptContext
-from jose import JWTError, jwt
-from datetime import datetime, timedelta, timezone
 import os
+import bcrypt
+from datetime import datetime, timedelta, timezone
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "d88bae1b269d698ce339c2ccb2e0d8ff380266513b17930a9c5bbef7b3505f7e")
 ALGORITHM = os.environ.get("ALGORITHM", "HS256")
