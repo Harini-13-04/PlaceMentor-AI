@@ -28,38 +28,77 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_USER: User = {
-  id: "u-demo-101",
-  name: "Harini Muthuvel",
-  full_name: "Harini Muthuvel",
-  email: "harini.muthuvel@srmist.edu.in",
-  avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
-  level: 12,
-  xp: 4500,
-  coins: 540,
-  department: "Computer Science & Engineering",
-  college: "SRM Institute of Science and Technology",
-  role: "SDE Aspirant",
-};
+const DEMO_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80";
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem("pm_token") || localStorage.getItem("placementor_token") || null;
+  });
+
   const [user, setUser] = useState<User | null>(() => {
     const savedUser = localStorage.getItem("pm_user");
-    if (savedUser) {
+    if (savedUser && token) {
       try {
         return JSON.parse(savedUser);
       } catch {
-        return DEMO_USER;
+        return null;
       }
     }
-    return DEMO_USER;
+    return null;
   });
 
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem("pm_token") || "demo-token";
-  });
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  // Validate token on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const storedToken = localStorage.getItem("pm_token") || localStorage.getItem("placementor_token");
+      if (!storedToken) {
+        setUser(null);
+        setToken(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          headers: {
+            "Authorization": `Bearer ${storedToken}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          const authenticatedUser: User = {
+            id: userData.id || `u-${Date.now()}`,
+            name: userData.name || userData.full_name || userData.email.split("@")[0],
+            full_name: userData.full_name || userData.name,
+            email: userData.email,
+            avatar: userData.avatar || DEMO_AVATAR,
+            level: userData.level || 1,
+            xp: userData.xp || 100,
+            coins: userData.coins || 50,
+            department: userData.department || "Computer Science & Engineering",
+            college: userData.college || "Placement Candidate",
+            role: "SDE Aspirant",
+          };
+          setUser(authenticatedUser);
+          setToken(storedToken);
+          localStorage.setItem("pm_user", JSON.stringify(authenticatedUser));
+        } else {
+          // Token invalid or expired
+          logout();
+        }
+      } catch {
+        // Keep existing user if network temporarily unavailable
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -88,48 +127,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({ email: email.trim(), password }),
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        // Fallback for offline demo login
-        if (email.toLowerCase().includes("test") || email.toLowerCase().includes("demo") || password.length >= 6) {
-          const loggedInUser: User = {
-            ...DEMO_USER,
-            email: email.trim(),
-            name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-          };
-          setUser(loggedInUser);
-          setToken("demo-jwt-token");
-          return { success: true };
-        }
-        const errData = await response.json().catch(() => ({}));
-        return { success: false, error: errData.detail || "Invalid email or password" };
+        return { success: false, error: data.detail || "Invalid email or password" };
       }
 
-      const data = await response.json();
       const authenticatedUser: User = {
         id: data.user?.id || `u-${Date.now()}`,
         name: data.user?.name || data.user?.full_name || email.split("@")[0],
         full_name: data.user?.full_name || data.user?.name,
         email: data.user?.email || email,
-        avatar: DEMO_USER.avatar,
-        level: DEMO_USER.level,
-        xp: DEMO_USER.xp,
-        department: data.user?.department || DEMO_USER.department,
-        college: data.user?.college || DEMO_USER.college,
+        avatar: data.user?.avatar || DEMO_AVATAR,
+        level: data.user?.level || 1,
+        xp: data.user?.xp || 100,
+        coins: data.user?.coins || 50,
+        department: data.user?.department || "Computer Science & Engineering",
+        college: data.user?.college || "Placement Candidate",
+        role: "SDE Aspirant",
       };
 
+      const newToken = data.access_token;
+      setToken(newToken);
       setUser(authenticatedUser);
-      setToken(data.access_token || "demo-jwt-token");
+      localStorage.setItem("pm_token", newToken);
+      localStorage.setItem("placementor_token", newToken);
+      localStorage.setItem("pm_user", JSON.stringify(authenticatedUser));
       return { success: true };
-    } catch {
-      // Offline fallback
-      const loggedInUser: User = {
-        ...DEMO_USER,
-        email: email.trim(),
-        name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      };
-      setUser(loggedInUser);
-      setToken("demo-jwt-token");
-      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: "Unable to connect to authentication server. Please check your network." };
     } finally {
       setIsLoading(false);
     }
@@ -148,69 +174,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name: fullName.trim(),
-          email: email.trim(),
-          password,
-        }),
-      });
-
-      if (!response.ok) {
-        // Fallback for offline register
-        const newUser: User = {
-          id: `u-${Date.now()}`,
           name: fullName.trim(),
           full_name: fullName.trim(),
           email: email.trim(),
-          avatar: DEMO_USER.avatar,
-          level: 1,
-          xp: 100,
-          coins: 50,
-          department: department || DEMO_USER.department,
-          college: college || DEMO_USER.college,
-        };
-        setUser(newUser);
-        setToken("demo-jwt-token");
-        return { success: true };
+          password,
+          department: department || "",
+          college: college || "",
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return { success: false, error: data.detail || "Email already registered or invalid details" };
       }
 
-      const data = await response.json();
       const newUser: User = {
         id: data.user?.id || `u-${Date.now()}`,
         name: fullName.trim(),
         full_name: fullName.trim(),
         email: email.trim(),
-        avatar: DEMO_USER.avatar,
+        avatar: DEMO_AVATAR,
         level: 1,
         xp: 100,
         coins: 50,
-        department: department || DEMO_USER.department,
-        college: college || DEMO_USER.college,
+        department: department || "Computer Science & Engineering",
+        college: college || "Placement Candidate",
+        role: "SDE Aspirant",
       };
 
+      const newToken = data.access_token;
+      setToken(newToken);
       setUser(newUser);
-      setToken(data.access_token || "demo-jwt-token");
+      localStorage.setItem("pm_token", newToken);
+      localStorage.setItem("placementor_token", newToken);
+      localStorage.setItem("pm_user", JSON.stringify(newUser));
       return { success: true };
-    } catch {
-      // Offline fallback
-      const newUser: User = {
-        id: `u-${Date.now()}`,
-        name: fullName.trim(),
-        full_name: fullName.trim(),
-        email: email.trim(),
-        avatar: DEMO_USER.avatar,
-        level: 1,
-        xp: 100,
-        coins: 50,
-        department: department || DEMO_USER.department,
-        college: college || DEMO_USER.college,
-      };
-      setUser(newUser);
-      setToken("demo-jwt-token");
-      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: "Unable to connect to authentication server. Please check your network." };
     } finally {
       setIsLoading(false);
     }
-
   };
 
   const logout = () => {
@@ -250,3 +254,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
