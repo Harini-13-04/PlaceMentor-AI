@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, APIRouter
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
@@ -9,6 +10,7 @@ from app.api.problems import router as problems_router
 from app.api.assessments import router as assessments_router
 from app.api.brainzone import router as brainzone_router
 from app.api.readiness import router as readiness_router
+from app.api.communication import router as communication_router
 from routes.profile import router as profile_router
 from routes.execution import router as execution_router
 from dotenv import load_dotenv
@@ -102,13 +104,12 @@ api_router.include_router(problems_router)
 api_router.include_router(assessments_router)
 api_router.include_router(brainzone_router)
 api_router.include_router(readiness_router)
+api_router.include_router(communication_router)
 api_router.include_router(profile_router)
 api_router.include_router(execution_router)
 
 # Mount the api router to the main app
 app.include_router(api_router)
-
-
 
 app.add_middleware(
     CORSMiddleware,

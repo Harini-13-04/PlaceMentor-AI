@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Landing from "./pages/Landing";
 import Onboarding from "./pages/Onboarding";
 import Home from "./pages/Home";
 import Practice from "./pages/Practice";
@@ -40,7 +41,9 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <Routes>
-              {/* Public Authentication Routes */}
+              {/* Public Entry & Authentication Routes */}
+              <Route path="/" element={<Landing />} />
+              <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
 
@@ -55,16 +58,6 @@ const App = () => (
               />
 
               {/* Protected Application Core Routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <Navigate to="/home" replace />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
               <Route
                 path="/home"
                 element={

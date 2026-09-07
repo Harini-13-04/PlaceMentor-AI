@@ -116,11 +116,11 @@ export default function Resume() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active full-screen overlay view: null = main dashboard hub, "analysis" = full screen ATS analysis, "improve" = full screen AI studio
-  const [activeView, setActiveView] = useState<"analysis" | "improve" | null>(null);
+  // Active full-screen overlay view: null = main dashboard hub, "analysis" = full screen ATS analysis, "improve" = full screen AI studio, "defend" = full screen defend studio
+  const [activeView, setActiveView] = useState<"analysis" | "improve" | "defend" | null>(null);
 
-  // Secondary Modals for Defend & Customize
-  const [activeModal, setActiveModal] = useState<"defend" | "customize" | null>(null);
+  // Secondary Modals for Customize
+  const [activeModal, setActiveModal] = useState<"customize" | null>(null);
 
   // Modal for Create Resume
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -232,6 +232,9 @@ export default function Resume() {
   const [isFollowupMode, setIsFollowupMode] = useState(false);
   const [lastClaimEvaluation, setLastClaimEvaluation] = useState<DefendClaimEvaluation | null>(null);
   const [defendFinalReport, setDefendFinalReport] = useState<DefendFinalReport | null>(null);
+  const [showQuestionResult, setShowQuestionResult] = useState(false);
+  const [pendingNextStep, setPendingNextStep] = useState<DefendAnswerResponse | null>(null);
+  const [evaluationHistory, setEvaluationHistory] = useState<DefendClaimEvaluation[]>([]);
 
   const handleInitDefendSession = async (resumeIdOverride?: string) => {
     const targetId = resumeIdOverride || activeResume?.id || resumesList?.[0]?.id;
@@ -243,8 +246,12 @@ export default function Resume() {
     setIsDefendInitLoading(true);
     setDefendFinalReport(null);
     setLastClaimEvaluation(null);
+    setShowQuestionResult(false);
+    setPendingNextStep(null);
+    setEvaluationHistory([]);
     setIsFollowupMode(false);
     setDefendUserAnswer("");
+    setActiveView("defend");
 
     try {
       const res = await initDefendSession(targetId);
@@ -278,26 +285,43 @@ export default function Resume() {
       });
 
       setLastClaimEvaluation(res.claim_evaluation);
-
-      if (res.needs_followup && res.followup_question) {
-        setIsFollowupMode(true);
-        setCurrentDefendQuestion(res.followup_question);
-        setDefendUserAnswer("");
-        toast.info("Follow-up probe: Please provide specific implementation details.");
-      } else if (res.is_complete && res.final_report) {
-        setDefendFinalReport(res.final_report);
-        toast.success(`Defense Session Complete! Score: ${res.final_report.overall_defensibility_score}/100`);
-      } else if (res.next_question && res.next_claim_id) {
-        setIsFollowupMode(false);
-        setCurrentDefendQuestion(res.next_question);
-        setCurrentDefendClaimId(res.next_claim_id);
-        setDefendUserAnswer("");
-        toast.success("Answer recorded! Moving to next claim question.");
+      if (res.claim_evaluation) {
+        setEvaluationHistory((prev) => [...prev, res.claim_evaluation]);
       }
+      setPendingNextStep(res);
+      setShowQuestionResult(true);
+      toast.success("Defense answer evaluated! Review feedback below.");
     } catch (err: any) {
       toast.error(err?.message || "Failed to evaluate answer.");
     } finally {
       setIsDefendSubmitting(false);
+    }
+  };
+
+  const handleProceedToNextQuestion = () => {
+    if (!pendingNextStep) return;
+    const res = pendingNextStep;
+
+    if (res.needs_followup && res.followup_question) {
+      setIsFollowupMode(true);
+      setCurrentDefendQuestion(res.followup_question);
+      setDefendUserAnswer("");
+      setShowQuestionResult(false);
+      setPendingNextStep(null);
+      toast.info("Follow-up probe: Please provide specific implementation details.");
+    } else if (res.is_complete && res.final_report) {
+      setDefendFinalReport(res.final_report);
+      setShowQuestionResult(false);
+      setPendingNextStep(null);
+      toast.success(`Defense Session Complete! Score: ${res.final_report.overall_defensibility_score}/100`);
+    } else if (res.next_question && res.next_claim_id) {
+      setIsFollowupMode(false);
+      setCurrentDefendQuestion(res.next_question);
+      setCurrentDefendClaimId(res.next_claim_id);
+      setDefendUserAnswer("");
+      setShowQuestionResult(false);
+      setPendingNextStep(null);
+      toast.success("Moving to next claim question.");
     }
   };
 
@@ -749,11 +773,175 @@ export default function Resume() {
       return;
     }
 
-    const currentName = activeResume?.personal_info?.full_name || personalInfo.full_name;
-    const currentTitle = activeResume?.target_role || personalInfo.location;
-    const currentEmail = activeResume?.personal_info?.email || personalInfo.email;
-    const currentPhone = activeResume?.personal_info?.phone || personalInfo.phone;
+    const currentName = activeResume?.personal_info?.full_name || personalInfo.full_name || "Resume";
+    const currentTitle = activeResume?.target_role || personalInfo.location || "";
+    const currentEmail = activeResume?.personal_info?.email || personalInfo.email || "";
+    const currentPhone = activeResume?.personal_info?.phone || personalInfo.phone || "";
+    const currentLocation = activeResume?.personal_info?.location || personalInfo.location || "";
+    const currentLinkedin = activeResume?.personal_info?.linkedin || personalInfo.linkedin || "";
+    const currentGithub = activeResume?.personal_info?.github || personalInfo.github || "";
+    const currentPortfolio = activeResume?.personal_info?.portfolio || personalInfo.portfolio || "";
     const currentSummary = activeResume?.summary || "";
+
+    const contactDetails = [currentEmail, currentPhone, currentLocation, currentLinkedin, currentGithub, currentPortfolio]
+      .filter(Boolean)
+      .join(" | ");
+
+    // Skills HTML
+    let skillsHtml = "";
+    if (activeResume?.skills && activeResume.skills.length > 0) {
+      skillsHtml = activeResume.skills
+        .filter((sc) => sc.category && sc.skills && sc.skills.length > 0)
+        .map(
+          (sc) => `<div class="skills-block"><strong>${sc.category}:</strong> ${sc.skills.join(", ")}</div>`
+        )
+        .join("");
+    } else {
+      skillsHtml = `
+        <div class="skills-block"><strong>Languages:</strong> ${skillCategories.languages.join(", ")}</div>
+        <div class="skills-block"><strong>Frameworks:</strong> ${skillCategories.frameworks.join(", ")}</div>
+        <div class="skills-block"><strong>Databases:</strong> ${skillCategories.databases.join(", ")}</div>
+        <div class="skills-block"><strong>Tools & Cloud:</strong> ${skillCategories.toolsAndCloud.join(", ")}</div>
+      `;
+    }
+
+    // Work Experience HTML
+    let experienceHtml = "";
+    if (activeResume?.experience && activeResume.experience.length > 0) {
+      experienceHtml = `
+        <h2>Work Experience</h2>
+        ${activeResume.experience
+          .map((exp) => {
+            const dateStr = [exp.start_date, exp.end_date || (exp.current ? "Present" : "")].filter(Boolean).join(" - ");
+            const subtitleStr = [exp.company, exp.location].filter(Boolean).join(" • ");
+            const bulletsStr = exp.bullets && exp.bullets.length > 0
+              ? `<ul class="bullet-list">${exp.bullets.map((b) => `<li>${b}</li>`).join("")}</ul>`
+              : "";
+            return `
+              <div class="item">
+                <div class="item-header">
+                  <span class="item-title">${exp.role || "Role"} ${subtitleStr ? `— ${subtitleStr}` : ""}</span>
+                  ${dateStr ? `<span class="item-date">${dateStr}</span>` : ""}
+                </div>
+                ${exp.description ? `<p>${exp.description}</p>` : ""}
+                ${bulletsStr}
+              </div>
+            `;
+          })
+          .join("")}
+      `;
+    }
+
+    // Projects HTML
+    let projectsHtml = "";
+    if (activeResume?.projects && activeResume.projects.length > 0) {
+      projectsHtml = `
+        <h2>Projects</h2>
+        ${activeResume.projects
+          .map((proj) => {
+            const techStr = proj.technologies && proj.technologies.length > 0 ? `[${proj.technologies.join(", ")}]` : "";
+            const bulletsStr = proj.bullets && proj.bullets.length > 0
+              ? `<ul class="bullet-list">${proj.bullets.map((b) => `<li>${b}</li>`).join("")}</ul>`
+              : "";
+            const linksStr = [proj.github_url, proj.live_url].filter(Boolean).join(" | ");
+            return `
+              <div class="item">
+                <div class="item-header">
+                  <span class="item-title">${proj.name || "Project"}</span>
+                  ${techStr ? `<span class="tech-stack">${techStr}</span>` : ""}
+                </div>
+                ${linksStr ? `<div class="item-location">${linksStr}</div>` : ""}
+                ${proj.description ? `<p>${proj.description}</p>` : ""}
+                ${bulletsStr}
+              </div>
+            `;
+          })
+          .join("")}
+      `;
+    }
+
+    // Education HTML
+    let educationHtml = "";
+    if (activeResume?.education && activeResume.education.length > 0) {
+      educationHtml = `
+        <h2>Education</h2>
+        ${activeResume.education
+          .map((edu) => {
+            const dateStr = [edu.start_date, edu.end_date || (edu.current ? "Present" : "")].filter(Boolean).join(" - ");
+            const degreeStr = [edu.degree, edu.field_of_study ? `in ${edu.field_of_study}` : "", edu.gpa ? `(${edu.gpa})` : ""].filter(Boolean).join(" ");
+            return `
+              <div class="item">
+                <div class="item-header">
+                  <span class="item-title">${edu.institution || "Institution"}</span>
+                  ${dateStr ? `<span class="item-date">${dateStr}</span>` : ""}
+                </div>
+                ${degreeStr ? `<div class="item-subtitle">${degreeStr}</div>` : ""}
+                ${edu.description ? `<p>${edu.description}</p>` : ""}
+              </div>
+            `;
+          })
+          .join("")}
+      `;
+    }
+
+    // Certifications HTML
+    let certsHtml = "";
+    if (activeResume?.certifications && activeResume.certifications.length > 0) {
+      certsHtml = `
+        <h2>Certifications</h2>
+        <ul class="bullet-list">
+          ${activeResume.certifications
+            .map((cert) => {
+              const issuerDate = [cert.issuer, cert.date].filter(Boolean).join(", ");
+              const cred = cert.credential_id ? `(ID: ${cert.credential_id})` : "";
+              return `<li><strong>${cert.name}</strong> ${issuerDate ? `— ${issuerDate}` : ""} ${cred} ${cert.url ? `• ${cert.url}` : ""}</li>`;
+            })
+            .join("")}
+        </ul>
+      `;
+    }
+
+    // Achievements HTML
+    let achievementsHtml = "";
+    if (activeResume?.achievements && activeResume.achievements.length > 0) {
+      achievementsHtml = `
+        <h2>Competitions & Achievements</h2>
+        <ul class="bullet-list">
+          ${activeResume.achievements
+            .map((ach) => {
+              const meta = [ach.organization, ach.result, ach.date].filter(Boolean).join(" • ");
+              return `<li><strong>${ach.title}</strong> ${meta ? `(${meta})` : ""}${ach.description ? `<br/>${ach.description}` : ""}</li>`;
+            })
+            .join("")}
+        </ul>
+      `;
+    }
+
+    // Languages HTML
+    let languagesHtml = "";
+    if (activeResume?.languages && activeResume.languages.length > 0) {
+      languagesHtml = `
+        <h2>Languages</h2>
+        <p>${activeResume.languages.map((l) => `${l.name} (${l.proficiency})`).join(" • ")}</p>
+      `;
+    }
+
+    // Custom Sections HTML
+    let customHtml = "";
+    if (activeResume?.custom_sections && activeResume.custom_sections.length > 0) {
+      customHtml = activeResume.custom_sections
+        .map((cs) => {
+          const bulletsStr = cs.bullets && cs.bullets.length > 0
+            ? `<ul class="bullet-list">${cs.bullets.map((b) => `<li>${b}</li>`).join("")}</ul>`
+            : "";
+          return `
+            <h2>${cs.title}</h2>
+            ${cs.content ? `<p>${cs.content}</p>` : ""}
+            ${bulletsStr}
+          `;
+        })
+        .join("");
+    }
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -761,31 +949,51 @@ export default function Resume() {
       <head>
         <title>${currentName} - Resume</title>
         <style>
-          @page { size: A4; margin: 20mm; }
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.5; font-size: 11pt; margin: 0; }
-          .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
+          @page { size: A4; margin: 15mm; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; line-height: 1.45; font-size: 10pt; margin: 0; }
+          .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 14px; }
           .name { font-size: 22pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #0f172a; margin: 0; }
-          .title { font-size: 11pt; font-weight: 600; color: #0d9488; margin-top: 4px; }
-          .contact { font-size: 9pt; color: #64748b; margin-top: 6px; }
-          h2 { font-size: 12pt; text-transform: uppercase; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; margin-top: 18px; margin-bottom: 8px; letter-spacing: 0.5px; }
-          p { margin: 0 0 8px 0; font-size: 10pt; }
-          .skills-block { font-size: 9.5pt; margin-bottom: 4px; }
+          .title { font-size: 11pt; font-weight: 600; color: #0d9488; margin-top: 3px; }
+          .contact { font-size: 9pt; color: #475569; margin-top: 6px; }
+          h2 { font-size: 11pt; font-weight: 700; text-transform: uppercase; color: #0f172a; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px; margin-top: 14px; margin-bottom: 8px; letter-spacing: 0.5px; }
+          p { margin: 0 0 6px 0; font-size: 9.5pt; color: #334155; }
+          .skills-block { font-size: 9.5pt; margin-bottom: 4px; color: #334155; }
+          .skills-block strong { color: #0f172a; }
+          .item { margin-bottom: 8px; }
+          .item-header { display: flex; justify-content: space-between; align-items: baseline; }
+          .item-title { font-weight: bold; font-size: 10pt; color: #0f172a; }
+          .item-subtitle { font-weight: 600; font-size: 9.5pt; color: #0d9488; margin-top: 1px; }
+          .item-date { font-size: 8.5pt; color: #64748b; font-weight: 500; }
+          .item-location { font-size: 8.5pt; color: #64748b; font-style: italic; margin-bottom: 2px; }
+          .tech-stack { font-size: 8.5pt; color: #0d9488; font-weight: 600; }
+          .bullet-list { margin: 3px 0 6px 18px; padding: 0; font-size: 9pt; color: #334155; }
+          .bullet-list li { margin-bottom: 2px; }
         </style>
       </head>
       <body>
         <div class="header">
           <div class="name">${currentName}</div>
-          <div class="title">${currentTitle}</div>
-          <div class="contact">${currentEmail} | ${currentPhone} | ${personalInfo.location}</div>
+          ${currentTitle ? `<div class="title">${currentTitle}</div>` : ""}
+          <div class="contact">${contactDetails}</div>
         </div>
 
-        <h2>Professional Summary</h2>
-        <p>${currentSummary}</p>
+        ${currentSummary ? `<h2>Professional Summary</h2><p>${currentSummary}</p>` : ""}
 
-        <h2>Technical Skills</h2>
-        <div class="skills-block"><strong>Languages:</strong> ${skillCategories.languages.join(", ")}</div>
-        <div class="skills-block"><strong>Frameworks:</strong> ${skillCategories.frameworks.join(", ")}</div>
-        <div class="skills-block"><strong>Databases:</strong> ${skillCategories.databases.join(", ")}</div>
+        ${skillsHtml ? `<h2>Technical Skills</h2>${skillsHtml}` : ""}
+
+        ${experienceHtml}
+
+        ${projectsHtml}
+
+        ${educationHtml}
+
+        ${certsHtml}
+
+        ${achievementsHtml}
+
+        ${languagesHtml}
+
+        ${customHtml}
       </body>
       </html>
     `;
@@ -1135,7 +1343,6 @@ export default function Resume() {
                   setIsCreateModalOpen(true);
                 }
               } else if (card.id === "defend") {
-                setActiveModal("defend");
                 handleInitDefendSession();
               } else {
                 setActiveModal(card.id as any);
@@ -1804,110 +2011,123 @@ export default function Resume() {
           document.body
         )}
 
-      {/* INTERACTIVE DEFEND YOUR RESUME STUDIO (PHASE 3) */}
-      {activeModal === "defend" &&
+      {/* FULL-SCREEN OVERLAY: INTERACTIVE DEFEND YOUR RESUME STUDIO (PHASE 3) */}
+      {activeView === "defend" &&
         createPortal(
-          <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <div className="bg-[#0A0D26] border border-blue-500/30 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95">
-              {/* Header */}
-              <div className="p-6 border-b border-blue-500/20 bg-[#0F1436] flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center">
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
-                      Defend Your Resume Studio
-                    </h2>
-                    <p className="text-xs text-slate-300">
-                      Test whether you can genuinely explain, justify, and defend your technical claims.
-                    </p>
-                  </div>
-                </div>
-
+          <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[9999] bg-[#070814] text-slate-100 flex flex-col h-screen w-screen overflow-y-auto">
+            {/* Header */}
+            <header className="sticky top-0 z-50 h-16 px-4 sm:px-8 border-b border-blue-900/40 bg-[#0B0D1E] flex items-center justify-between gap-4 shrink-0 shadow-lg">
+              <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setActiveModal(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                  onClick={() => setActiveView(null)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-bold transition-all"
                 >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Resume Hub</span>
+                </button>
+                <div className="h-5 w-px bg-slate-800 hidden sm:block" />
+                <span className="text-xs font-extrabold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-400" /> Defend Your Resume Studio
+                </span>
+                {defendSession && (
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-mono font-bold border border-blue-500/30 hidden sm:inline-block">
+                    CLAIM {defendSession.claims.findIndex((c) => c.id === currentDefendClaimId) + 1} OF {defendSession.total_claims}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                {defendSession && (
+                  <button
+                    onClick={() => handleInitDefendSession()}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 flex items-center gap-1.5 transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Reset Session</span>
+                  </button>
+                )}
+                <button onClick={() => setActiveView(null)} className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300">
                   <X className="w-5 h-5" />
                 </button>
               </div>
+            </header>
 
-              {/* Modal Body */}
-              <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-100">
-                {/* STATE 1: INITIAL SUMMARY & START SESSION */}
-                {!defendSession && !isDefendInitLoading && (
-                  <div className="p-6 rounded-2xl bg-[#101438] border border-blue-500/20 space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-                      <div className="space-y-1">
-                        <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">Target Resume:</span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <select
-                            value={activeResume?.id || resumesList?.[0]?.id || ""}
-                            onChange={(e) => {
-                              openResumeEditor(e.target.value);
-                              handleInitDefendSession(e.target.value);
-                            }}
-                            className="p-2.5 rounded-xl bg-[#07091B] border border-slate-700 text-xs text-white focus:border-blue-400"
-                          >
-                            {resumesList?.map((r) => (
-                              <option key={r.id} value={r.id}>
-                                {r.name} ({r.target_role})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+            {/* Studio Main Content */}
+            <div className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+              {/* STATE 1: INITIAL SUMMARY & START SESSION */}
+              {!defendSession && !isDefendInitLoading && (
+                <div className="p-8 rounded-3xl bg-[#0D1028] border border-blue-500/30 space-y-6 shadow-2xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">Select Resume for Defense:</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <select
+                          value={activeResume?.id || resumesList?.[0]?.id || ""}
+                          onChange={(e) => {
+                            openResumeEditor(e.target.value);
+                            handleInitDefendSession(e.target.value);
+                          }}
+                          className="p-3 rounded-xl bg-[#07091B] border border-slate-700 text-xs text-white focus:border-blue-400 font-semibold"
+                        >
+                          {resumesList?.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name} ({r.target_role})
+                            </option>
+                          ))}
+                        </select>
                       </div>
-
-                      <span className="text-[10px] font-mono px-3 py-1 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
-                        Zero Hallucinated Claims • Fair Evaluation
-                      </span>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 space-y-2 text-xs">
-                      <h4 className="font-extrabold text-blue-300 flex items-center gap-2">
-                        <Lock className="w-4 h-4 text-blue-400" />
-                        Defensibility Core Principles
-                      </h4>
-                      <p className="text-slate-300 leading-relaxed">
-                        Defend ≠ memorize your resume. The engine probes technical understanding, specificity, decision rationale, and ownership. Answers are evaluated for technical substance—<strong>different wording is never penalized</strong>.
-                      </p>
-                    </div>
-
-                    <div className="flex justify-center pt-2">
-                      <button
-                        onClick={() => handleInitDefendSession()}
-                        className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/20 transition-all hover:scale-105"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Start Interactive Defense Session →</span>
-                      </button>
-                    </div>
+                    <span className="text-xs font-mono px-3.5 py-1.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/30 font-semibold">
+                      Zero Hallucinated Claims • Technical Evaluation
+                    </span>
                   </div>
-                )}
 
-                {/* LOADING STATE */}
-                {isDefendInitLoading && (
-                  <div className="p-12 flex flex-col items-center justify-center space-y-4 text-center">
-                    <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
-                    <p className="text-sm font-semibold text-blue-300">
-                      Analyzing resume claims & building technical interview probes...
+                  <div className="p-5 rounded-2xl bg-blue-500/10 border border-blue-500/30 space-y-2 text-xs">
+                    <h4 className="font-extrabold text-blue-300 flex items-center gap-2 text-sm">
+                      <Lock className="w-4 h-4 text-blue-400" />
+                      Defensibility Core Principles
+                    </h4>
+                    <p className="text-slate-300 leading-relaxed text-xs">
+                      Defend ≠ memorize your resume. The AI engine probes technical understanding, specificity, decision rationale, and ownership. Answers are evaluated for genuine technical substance—<strong>different wording is never penalized</strong>.
                     </p>
                   </div>
-                )}
 
-                {/* STATE 2: ACTIVE INTERVIEW Q&A SESSION */}
-                {defendSession && !defendFinalReport && (
-                  <div className="space-y-6 animate-in fade-in">
-                    {/* Session Progress Header */}
-                    <div className="p-4 rounded-2xl bg-[#101438] border border-blue-500/20 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex justify-center pt-4">
+                    <button
+                      onClick={() => handleInitDefendSession()}
+                      className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-extrabold text-sm flex items-center gap-3 shadow-xl shadow-blue-500/25 transition-all hover:scale-105"
+                    >
+                      <ShieldCheck className="w-5 h-5" />
+                      <span>Start Interactive Defense Session →</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* LOADING STATE */}
+              {isDefendInitLoading && (
+                <div className="p-16 flex flex-col items-center justify-center space-y-4 text-center">
+                  <Loader2 className="w-12 h-12 text-blue-400 animate-spin" />
+                  <p className="text-base font-bold text-blue-300">
+                    Extracting technical claims & constructing interview probes...
+                  </p>
+                </div>
+              )}
+
+              {/* STATE 2: ACTIVE INTERVIEW SESSION */}
+              {defendSession && !defendFinalReport && (
+                <div className="space-y-6 animate-in fade-in">
+                  {/* Progress Header */}
+                  <div className="p-5 rounded-2xl bg-[#0D1028] border border-blue-500/30 space-y-3 shadow-lg">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-blue-300">Active Question</span>
-                        <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-200 border border-blue-500/30 text-[10px] font-mono">
-                          Claim {defendSession.claims.findIndex(c => c.id === currentDefendClaimId) + 1} of {defendSession.total_claims}
+                        <span className="font-bold text-blue-300 text-sm">Active Question Progress</span>
+                        <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-200 border border-blue-500/30 text-xs font-mono font-bold">
+                          Claim {defendSession.claims.findIndex((c) => c.id === currentDefendClaimId) + 1} of {defendSession.total_claims}
                         </span>
                         {isFollowupMode && (
-                          <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                          <span className="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold">
                             ⚠️ Follow-up Probe
                           </span>
                         )}
@@ -1915,45 +2135,63 @@ export default function Resume() {
 
                       <button
                         onClick={() => handleInitDefendSession()}
-                        className="text-[10px] text-slate-400 hover:text-white underline flex items-center gap-1"
+                        className="text-xs text-slate-400 hover:text-white underline flex items-center gap-1"
                       >
-                        <RotateCcw className="w-3 h-3" /> Reset Session
+                        <RotateCcw className="w-3.5 h-3.5" /> Reset Session
                       </button>
                     </div>
 
-                    {/* INTERVIEW QUESTION PROBE CARD */}
-                    <div className="p-6 rounded-2xl bg-gradient-to-br from-[#121742] via-[#0E1236] to-[#0A0D26] border border-blue-500/30 space-y-4 shadow-xl">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-400 flex items-center gap-1.5">
+                    {/* Progress Bar */}
+                    <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+                        style={{
+                          width: `${
+                            ((defendSession.claims.findIndex((c) => c.id === currentDefendClaimId) + 1) /
+                              defendSession.total_claims) *
+                            100
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* SUB-STATE 2A: QUESTION PROBE CARD (When not showing previous evaluation) */}
+                  {!showQuestionResult && (
+                    <div className="p-8 rounded-3xl bg-gradient-to-br from-[#10143B] via-[#0D102A] to-[#080B1C] border border-blue-500/30 space-y-6 shadow-2xl">
+                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                        <span className="text-xs font-extrabold uppercase tracking-widest text-blue-400 flex items-center gap-2">
                           <HelpCircle className="w-4 h-4 text-blue-400" />
-                          Interviewer Probe Question
+                          Interviewer Technical Question
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">
+                          Explain implementation, choices & architecture
                         </span>
                       </div>
 
-                      <h3 className="text-base sm:text-lg font-bold text-white leading-relaxed">
+                      <h3 className="text-lg sm:text-xl font-bold text-white leading-relaxed">
                         &quot;{currentDefendQuestion}&quot;
                       </h3>
 
-                      {/* USER ANSWER INPUT BOX */}
                       <div className="space-y-2 pt-2">
                         <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
                           <span>Your Explanation / Defense *</span>
-                          <span className="text-[10px] text-slate-400">Explain implementation, choices & tools</span>
+                          <span className="text-[11px] text-slate-400">Be specific about tools, designs, and decisions</span>
                         </label>
                         <textarea
-                          rows={4}
+                          rows={6}
                           value={defendUserAnswer}
                           onChange={(e) => setDefendUserAnswer(e.target.value)}
                           placeholder="Explain your technical design, tools used, performance trade-offs, or personal role...\n\ne.g., I implemented React memoization and lazy loading components, combined with REST API payload caching to handle peak user loads efficiently..."
-                          className="w-full p-3.5 rounded-xl bg-[#07091B] border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-400 leading-relaxed"
+                          className="w-full p-4 rounded-2xl bg-[#060817] border border-slate-700/80 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-400 leading-relaxed shadow-inner"
                         />
                       </div>
 
-                      <div className="flex items-center justify-end pt-1">
+                      <div className="flex items-center justify-end pt-2">
                         <button
                           onClick={handleSubmitDefendAnswer}
                           disabled={isDefendSubmitting}
-                          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-500/20 disabled:opacity-50 transition-all"
+                          className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white text-xs font-bold flex items-center gap-2.5 shadow-xl shadow-blue-500/20 disabled:opacity-50 transition-all hover:scale-105"
                         >
                           {isDefendSubmitting ? (
                             <>
@@ -1963,178 +2201,290 @@ export default function Resume() {
                           ) : (
                             <>
                               <Send className="w-4 h-4" />
-                              <span>{isFollowupMode ? "Submit Follow-up Defense" : "Submit Answer & Proceed"}</span>
+                              <span>{isFollowupMode ? "Submit Follow-up Defense" : "Submit Answer & Evaluate"}</span>
                             </>
                           )}
                         </button>
                       </div>
                     </div>
+                  )}
 
-                    {/* LAST CLAIM EVALUATION FEEDBACK BANNER */}
-                    {lastClaimEvaluation && (
-                      <div className="p-4 rounded-2xl bg-[#0D1130] border border-blue-500/20 space-y-3 text-xs animate-in fade-in">
-                        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                          <span className="font-bold text-blue-300 flex items-center gap-1.5">
-                            <Sparkles className="w-4 h-4 text-emerald-400" />
-                            Previous Response Feedback
-                          </span>
-                          <span
+                  {/* SUB-STATE 2B: QUESTION EVALUATION RESULT CARD (Shown after submitting an answer) */}
+                  {showQuestionResult && lastClaimEvaluation && (
+                    <div className="p-8 rounded-3xl bg-gradient-to-br from-[#0F143D] via-[#0C0F2F] to-[#07091F] border-2 border-blue-500/40 space-y-6 shadow-2xl animate-in zoom-in-95">
+                      {/* Evaluation Top Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                        <div className="flex items-center gap-3">
+                          <div
                             className={cn(
-                              "text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase",
-                              lastClaimEvaluation.rating === "strong"
-                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                                : lastClaimEvaluation.rating === "needs_prep"
-                                ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
-                                : "bg-red-500/20 text-red-300 border-red-500/30"
+                              "w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg border shadow-lg",
+                              (lastClaimEvaluation.rating || "needs_prep") === "strong"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-emerald-500/20"
+                                : (lastClaimEvaluation.rating || "needs_prep") === "needs_prep"
+                                ? "bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-amber-500/20"
+                                : "bg-red-500/20 text-red-300 border-red-500/40 shadow-red-500/20"
                             )}
                           >
-                            {lastClaimEvaluation.rating} ({lastClaimEvaluation.score}/100)
-                          </span>
-                        </div>
-
-                        <p className="text-slate-300">{lastClaimEvaluation.feedback}</p>
-
-                        {lastClaimEvaluation.strengths.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {lastClaimEvaluation.strengths.map((st, idx) => (
-                              <span key={idx} className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-200 text-[10px]">
-                                ✓ {st}
-                              </span>
-                            ))}
+                            {lastClaimEvaluation.score ?? 0}
                           </div>
-                        )}
+                          <div>
+                            <span
+                              className={cn(
+                                "text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border uppercase tracking-wider",
+                                (lastClaimEvaluation.rating || "needs_prep") === "strong"
+                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                  : (lastClaimEvaluation.rating || "needs_prep") === "needs_prep"
+                                  ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                                  : "bg-red-500/20 text-red-300 border-red-500/30"
+                              )}
+                            >
+                              {(lastClaimEvaluation.rating || "needs_prep").replace("_", " ")}
+                            </span>
+                            <h4 className="text-base font-bold text-white mt-1">Question Evaluation Feedback</h4>
+                          </div>
+                        </div>
+
+                        <span className="text-xs font-mono text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700">
+                          Score: {lastClaimEvaluation.score ?? 0} / 100
+                        </span>
                       </div>
-                    )}
+
+                      {/* Question & Answer Summary */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div className="p-4 rounded-2xl bg-[#06081B] border border-slate-800 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-blue-400 uppercase tracking-wider">
+                            QUESTION TESTED
+                          </span>
+                          <p className="text-slate-200 font-medium leading-relaxed">&quot;{lastClaimEvaluation.claim_text || currentDefendQuestion}&quot;</p>
+                        </div>
+
+                        <div className="p-4 rounded-2xl bg-[#06081B] border border-slate-800 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-teal-400 uppercase tracking-wider">
+                            YOUR SUBMITTED DEFENSE
+                          </span>
+                          <p className="text-slate-300 italic leading-relaxed">&quot;{lastClaimEvaluation.user_answer || defendUserAnswer}&quot;</p>
+                        </div>
+                      </div>
+
+                      {/* Feedback Text */}
+                      {lastClaimEvaluation.feedback && (
+                        <div className="p-4 rounded-2xl bg-[#080B22] border border-blue-500/20 space-y-1 text-xs">
+                          <span className="text-[10px] font-bold text-blue-300 uppercase">AI Interviewer Evaluation Note</span>
+                          <p className="text-slate-300 leading-relaxed">{lastClaimEvaluation.feedback}</p>
+                        </div>
+                      )}
+
+                      {/* STRENGTHS VS GAPS */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        {/* Strengths */}
+                        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2.5">
+                          <h5 className="font-extrabold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            Technical Strengths ({(lastClaimEvaluation.strengths || []).length})
+                          </h5>
+                          {(lastClaimEvaluation.strengths || []).length > 0 ? (
+                            <ul className="space-y-1.5">
+                              {(lastClaimEvaluation.strengths || []).map((st, idx) => (
+                                <li key={idx} className="p-2 rounded-lg bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 text-[11px] flex items-center gap-1.5">
+                                  <span>✓</span> {st}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-slate-400 italic">No specific strengths highlighted.</p>
+                          )}
+                        </div>
+
+                        {/* Gaps / Areas for Improvement */}
+                        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+                          <h5 className="font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4 text-amber-400" />
+                            Areas for Improvement ({(lastClaimEvaluation.gaps || []).length})
+                          </h5>
+                          {(lastClaimEvaluation.gaps || []).length > 0 ? (
+                            <ul className="space-y-1.5">
+                              {(lastClaimEvaluation.gaps || []).map((gp, idx) => (
+                                <li key={idx} className="p-2 rounded-lg bg-amber-500/20 text-amber-200 border border-amber-500/30 text-[11px]">
+                                  💡 {gp}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-emerald-300 font-medium">No major missing technical details noted!</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* PROCEED TO NEXT QUESTION BUTTON */}
+                      <div className="flex items-center justify-end pt-4 border-t border-slate-800">
+                        <button
+                          onClick={handleProceedToNextQuestion}
+                          className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white text-xs font-extrabold flex items-center gap-2.5 shadow-xl shadow-blue-500/20 transition-all hover:scale-105"
+                        >
+                          <span>
+                            {pendingNextStep?.needs_followup
+                              ? "Answer Follow-up Probe →"
+                              : pendingNextStep?.is_complete
+                              ? "View Final Defensibility Scorecard →"
+                              : "Proceed to Next Question →"}
+                          </span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* HISTORY LOG OF COMPLETED CLAIMS IN THIS SESSION */}
+                  {evaluationHistory.length > 0 && (
+                    <div className="p-6 rounded-2xl bg-[#0D1028] border border-blue-500/20 space-y-4 text-xs">
+                      <h4 className="font-extrabold text-blue-300 uppercase tracking-wider flex items-center gap-2">
+                        <HistoryIcon className="w-4 h-4 text-blue-400" />
+                        Completed Questions History ({evaluationHistory.length})
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {evaluationHistory.map((evalItem, idx) => (
+                          <div key={idx} className="p-3.5 rounded-xl bg-[#060818] border border-slate-800 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-white text-[11px]">Q{idx + 1}: Score {evalItem.score ?? 0}/100</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 uppercase">
+                                {evalItem.rating || "evaluated"}
+                              </span>
+                            </div>
+                            <p className="text-slate-400 text-[10px] line-clamp-2">{evalItem.claim_text || evalItem.user_answer}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* STATE 3: FINAL DEFENSIBILITY SCORECARD (0-100) */}
+              {defendFinalReport && (
+                <div className="space-y-6 animate-in fade-in pt-2">
+                  {/* Score Hero Banner */}
+                  <div className="p-8 rounded-3xl bg-gradient-to-r from-blue-950/50 via-indigo-950/30 to-[#0A0D26] border border-blue-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-2xl">
+                    <div className="flex items-center gap-6">
+                      <div className="w-28 h-28 rounded-full bg-[#121636] border-4 border-blue-500/40 flex flex-col items-center justify-center text-center shrink-0 shadow-[0_0_30px_rgba(59,130,246,0.4)]">
+                        <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-teal-300 to-emerald-400">
+                          {defendFinalReport.overall_defensibility_score}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">/ 100 DEFENSE</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 inline-block">
+                          {defendFinalReport.overall_defensibility_score >= 80
+                            ? "Interview Solid (Top 10% Defensibility)"
+                            : defendFinalReport.overall_defensibility_score >= 60
+                            ? "Moderate Preparation Needed"
+                            : "Needs Technical Preparation"}
+                        </span>
+                        <h3 className="text-2xl font-black text-white">
+                          Defensibility Score: {defendFinalReport.overall_defensibility_score} / 100
+                        </h3>
+                        <p className="text-xs text-slate-300 max-w-md leading-relaxed">
+                          Evaluated across Technical Understanding, Specificity, Technical Correctness, and Ownership.
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                )}
 
-                {/* STATE 3: FINAL DEFENSIBILITY SCORECARD (0-100) */}
-                {defendFinalReport && (
-                  <div className="space-y-6 animate-in fade-in pt-2">
-                    {/* Score Hero Banner */}
-                    <div className="p-6 rounded-2xl bg-gradient-to-r from-blue-950/40 via-indigo-950/20 to-[#0A0D26] border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xl">
-                      <div className="flex items-center gap-5">
-                        <div className="w-24 h-24 rounded-full bg-[#121636] border-4 border-blue-500/40 flex flex-col items-center justify-center text-center shrink-0 shadow-[0_0_25px_rgba(59,130,246,0.35)]">
-                          <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-teal-300 to-emerald-400">
-                            {defendFinalReport.overall_defensibility_score}
-                          </span>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase">/ 100 DEFENSE</span>
-                        </div>
-
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 inline-block">
-                            {defendFinalReport.overall_defensibility_score >= 80
-                              ? "Interview Solid (Top 10% Defensibility)"
-                              : defendFinalReport.overall_defensibility_score >= 60
-                              ? "Moderate Preparation Needed"
-                              : "Needs Technical Preparation"}
-                          </span>
-                          <h3 className="text-xl font-bold text-white">
-                            Defensibility Score: {defendFinalReport.overall_defensibility_score} / 100
-                          </h3>
-                          <p className="text-xs text-slate-300 max-w-md">
-                            Evaluated across Understanding, Specificity, Technical Correctness, and Ownership.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* STRONG CLAIMS VS CLAIMS NEEDING PREP */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      {/* Strong Claims */}
-                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2.5">
-                        <h4 className="font-extrabold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          ✅ Strong Claims Defended ({defendFinalReport.strong_claims.length})
-                        </h4>
-                        {defendFinalReport.strong_claims.length > 0 ? (
-                          <ul className="space-y-1.5">
-                            {defendFinalReport.strong_claims.map((cl, idx) => (
-                              <li key={idx} className="p-2 rounded-lg bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 text-[11px]">
-                                {cl}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-slate-400 italic">No claims categorized as fully defended yet.</p>
-                        )}
-                      </div>
-
-                      {/* Claims Needing Prep */}
-                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
-                        <h4 className="font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <AlertTriangle className="w-4 h-4 text-amber-400" />
-                          ⚠️ Claims Needing Preparation ({defendFinalReport.claims_needing_prep.length})
-                        </h4>
-                        {defendFinalReport.claims_needing_prep.length > 0 ? (
-                          <ul className="space-y-1.5">
-                            {defendFinalReport.claims_needing_prep.map((cl, idx) => (
-                              <li key={idx} className="p-2 rounded-lg bg-amber-500/20 text-amber-200 border border-amber-500/30 text-[11px]">
-                                {cl}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-emerald-300 font-medium">All analyzed claims defended solidly!</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* DEFENCELESS CLAIMS IF ANY */}
-                    {defendFinalReport.defenseless_claims.length > 0 && (
-                      <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-2 text-xs">
-                        <h4 className="font-extrabold text-red-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <X className="w-4 h-4 text-red-400" />
-                          ❌ Defenseless Claims ({defendFinalReport.defenseless_claims.length})
-                        </h4>
-                        <ul className="space-y-1.5">
-                          {defendFinalReport.defenseless_claims.map((cl, idx) => (
-                            <li key={idx} className="p-2 rounded-lg bg-red-500/20 text-red-200 border border-red-500/30 text-[11px]">
+                  {/* STRONG CLAIMS VS CLAIMS NEEDING PREP */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    {/* Strong Claims */}
+                    <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
+                      <h4 className="font-extrabold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        ✅ Strong Claims Defended ({defendFinalReport.strong_claims.length})
+                      </h4>
+                      {defendFinalReport.strong_claims.length > 0 ? (
+                        <ul className="space-y-2">
+                          {defendFinalReport.strong_claims.map((cl, idx) => (
+                            <li key={idx} className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-200 border border-emerald-500/30 text-xs">
                               {cl}
                             </li>
                           ))}
                         </ul>
-                      </div>
-                    )}
+                      ) : (
+                        <p className="text-slate-400 italic">No claims categorized as fully defended yet.</p>
+                      )}
+                    </div>
 
-                    {/* SUGGESTED PREPARATION TOPICS */}
-                    {defendFinalReport.suggested_prep_topics.length > 0 && (
-                      <div className="p-5 rounded-2xl bg-[#111638] border border-blue-500/30 space-y-3 text-xs">
-                        <h4 className="font-extrabold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <BookOpen className="w-4 h-4 text-blue-400" />
-                          💡 Suggested Technical Preparation Topics
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {defendFinalReport.suggested_prep_topics.map((tp, idx) => (
-                            <div key={idx} className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 flex items-center gap-2">
-                              <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                              <span>{tp}</span>
-                            </div>
+                    {/* Claims Needing Prep */}
+                    <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
+                      <h4 className="font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-400" />
+                        ⚠️ Claims Needing Preparation ({defendFinalReport.claims_needing_prep.length})
+                      </h4>
+                      {defendFinalReport.claims_needing_prep.length > 0 ? (
+                        <ul className="space-y-2">
+                          {defendFinalReport.claims_needing_prep.map((cl, idx) => (
+                            <li key={idx} className="p-2.5 rounded-xl bg-amber-500/20 text-amber-200 border border-amber-500/30 text-xs">
+                              {cl}
+                            </li>
                           ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ACTION BUTTONS */}
-                    <div className="flex items-center justify-end gap-3 pt-3">
-                      <button
-                        onClick={() => handleInitDefendSession()}
-                        className="px-5 py-2.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-bold transition-all flex items-center gap-1.5"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        <span>Practice Session Again</span>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveModal(null)}
-                        className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md transition-all"
-                      >
-                        Return to Command Center
-                      </button>
+                        </ul>
+                      ) : (
+                        <p className="text-emerald-300 font-medium">All analyzed claims defended solidly!</p>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {/* DEFENCELESS CLAIMS IF ANY */}
+                  {defendFinalReport.defenseless_claims.length > 0 && (
+                    <div className="p-5 rounded-2xl bg-red-500/10 border border-red-500/30 space-y-2 text-xs">
+                      <h4 className="font-extrabold text-red-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <X className="w-4 h-4 text-red-400" />
+                        ❌ Defenseless Claims ({defendFinalReport.defenseless_claims.length})
+                      </h4>
+                      <ul className="space-y-2">
+                        {defendFinalReport.defenseless_claims.map((cl, idx) => (
+                          <li key={idx} className="p-2.5 rounded-xl bg-red-500/20 text-red-200 border border-red-500/30 text-xs">
+                            {cl}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* SUGGESTED PREPARATION TOPICS */}
+                  {defendFinalReport.suggested_prep_topics.length > 0 && (
+                    <div className="p-6 rounded-2xl bg-[#0D1028] border border-blue-500/30 space-y-4 text-xs">
+                      <h4 className="font-extrabold text-blue-300 uppercase tracking-wider flex items-center gap-2 text-sm">
+                        <BookOpen className="w-4.5 h-4.5 text-blue-400" />
+                        💡 Suggested Technical Preparation Topics
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {defendFinalReport.suggested_prep_topics.map((tp, idx) => (
+                          <div key={idx} className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-200 flex items-center gap-2.5">
+                            <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
+                            <span>{tp}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ACTION BUTTONS */}
+                  <div className="flex items-center justify-end gap-3 pt-3">
+                    <button
+                      onClick={() => handleInitDefendSession()}
+                      className="px-6 py-3 rounded-2xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-bold transition-all flex items-center gap-2"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      <span>Practice Session Again</span>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveView(null)}
+                      className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white text-xs font-extrabold shadow-xl transition-all"
+                    >
+                      Return to Command Center
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>,
           document.body
