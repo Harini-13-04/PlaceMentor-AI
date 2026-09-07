@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import ProfileMenu from "./ProfileMenu";
-import GlobalAIMentor from "./GlobalAIMentor";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { API_URL, getAuthHeaders, getAuthToken } from "@/config";
@@ -26,7 +25,6 @@ import {
   ArrowRight,
   X,
   Target,
-  Bot,
   Menu,
 } from "lucide-react";
 
@@ -57,7 +55,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: "Readiness", path: "/placement-readiness", icon: BarChart3 },
     { name: "BrainZone", path: "/brain-zone", icon: BrainCircuit },
     { name: "Quizee", path: "/quizee", icon: HelpCircle },
-    { name: "AI Mentor", path: "/ai-mentor", icon: Bot },
     { name: "Recommendations", path: "/recommendations", icon: Target },
   ];
 
@@ -408,9 +405,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
-
-      {/* Global AI Mentor Component */}
-      <GlobalAIMentor />
 
       {/* Global Search Modal */}
       {isSearchOpen && (

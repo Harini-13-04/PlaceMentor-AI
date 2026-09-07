@@ -19,7 +19,6 @@ import Resume from "./pages/Resume";
 import PlacementReadiness from "./pages/PlacementReadiness";
 import BrainZone from "./pages/BrainZone";
 import Quizee from "./pages/Quizee";
-import AIMentor from "./pages/AIMentor";
 import Recommendations from "./pages/Recommendations";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
@@ -174,16 +173,6 @@ const App = () => (
                   <ProtectedRoute>
                     <Layout>
                       <Achievements />
-                    </Layout>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/ai-mentor"
-                element={
-                  <ProtectedRoute>
-                    <Layout>
-                      <AIMentor />
                     </Layout>
                   </ProtectedRoute>
                 }

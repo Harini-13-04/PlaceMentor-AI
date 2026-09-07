@@ -3,7 +3,6 @@ from fastapi import FastAPI, APIRouter
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.resumes import router as resumes_router
-from app.api.mentors import router as mentors_router
 from app.api.recommendations import router as recommendations_router
 from app.api.onboarding import router as onboarding_router
 from app.api.problems import router as problems_router
@@ -97,7 +96,6 @@ async def get_status_checks():
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(resumes_router)
-api_router.include_router(mentors_router)
 api_router.include_router(recommendations_router)
 api_router.include_router(onboarding_router)
 api_router.include_router(problems_router)
