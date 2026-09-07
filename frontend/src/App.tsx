@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Onboarding from "./pages/Onboarding";
 import Home from "./pages/Home";
 import Practice from "./pages/Practice";
 import Aptitude from "./pages/Aptitude";
@@ -17,6 +18,8 @@ import Resume from "./pages/Resume";
 import PlacementReadiness from "./pages/PlacementReadiness";
 import BrainZone from "./pages/BrainZone";
 import Quizee from "./pages/Quizee";
+import AIMentor from "./pages/AIMentor";
+import Recommendations from "./pages/Recommendations";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Leaderboard from "./pages/Leaderboard";
@@ -40,6 +43,16 @@ const App = () => (
               {/* Public Authentication Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+
+              {/* Dedicated Full-Screen Onboarding Route (No Layout/Dashboard behind it) */}
+              <Route
+                path="/onboarding"
+                element={
+                  <ProtectedRoute>
+                    <Onboarding />
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Protected Application Core Routes */}
               <Route
@@ -173,6 +186,26 @@ const App = () => (
                 }
               />
               <Route
+                path="/ai-mentor"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <AIMentor />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/recommendations"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Recommendations />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/profile"
                 element={
                   <ProtectedRoute>
@@ -194,6 +227,7 @@ const App = () => (
               />
 
               {/* Legacy Aliases and Redirects */}
+              <Route path="/quiz" element={<Navigate to="/quizee" replace />} />
               <Route path="/readiness" element={<Navigate to="/placement-readiness" replace />} />
               <Route path="/copilot" element={<Navigate to="/practice" replace />} />
 

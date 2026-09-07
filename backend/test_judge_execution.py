@@ -200,6 +200,55 @@ public:
     assert res["status"] == "Compilation Error", f"C++ syntax expected Compilation Error, got {res['status']}"
 
 
+def test_sql_judge():
+    combine_tcs = [
+        TestCaseItem(input="Person and Address tables", expectedOutput="Joined records"),
+        TestCaseItem(input="Null address handling", expectedOutput="Person with null city/state", isHidden=True),
+    ]
+
+    # Correct Query
+    sql_correct = "SELECT firstName, lastName, city, state FROM Person LEFT JOIN Address ON Person.personId = Address.personId;"
+    res = execute_sql_code(sql_correct, "combine-two-tables", combine_tcs)
+    assert res["status"] == "Accepted", f"SQL combine-two-tables expected Accepted, got {res['status']}"
+
+    # Wrong Query (Inner Join that drops rows without addresses or wrong columns)
+    sql_wrong = "SELECT firstName FROM Person WHERE personId = 999;"
+    res = execute_sql_code(sql_wrong, "combine-two-tables", combine_tcs)
+    assert res["status"] == "Wrong Answer", f"SQL wrong expected Wrong Answer, got {res['status']}"
+
+    # Syntax Error Query
+    sql_syn = "SELEKT * FORM Person"
+    res = execute_sql_code(sql_syn, "combine-two-tables", combine_tcs)
+    assert res["status"] == "Compilation Error", f"SQL syntax error expected Compilation Error, got {res['status']}"
+
+    # Second highest salary test
+    shs_tcs = [
+        TestCaseItem(input="Employee table", expectedOutput="200"),
+        TestCaseItem(input="Hidden offset test", expectedOutput="200", isHidden=True),
+    ]
+    shs_correct = "SELECT MAX(salary) AS SecondHighestSalary FROM Employee WHERE salary < (SELECT MAX(salary) FROM Employee);"
+    res = execute_sql_code(shs_correct, "second-highest-salary", shs_tcs)
+    assert res["status"] == "Accepted", f"SQL second-highest-salary expected Accepted, got {res['status']}"
+
+    # Duplicate emails test
+    dup_tcs = [
+        TestCaseItem(input="Person table", expectedOutput="['a@b.com']"),
+        TestCaseItem(input="Hidden counts", expectedOutput="['a@b.com']", isHidden=True),
+    ]
+    dup_correct = "SELECT email FROM Person GROUP BY email HAVING COUNT(email) > 1;"
+    res = execute_sql_code(dup_correct, "duplicate-emails", dup_tcs)
+    assert res["status"] == "Accepted", f"SQL duplicate-emails expected Accepted, got {res['status']}"
+
+    # Customers who never order test
+    cust_tcs = [
+        TestCaseItem(input="Customers and Orders tables", expectedOutput="Henry, Max"),
+        TestCaseItem(input="Hidden customer check", expectedOutput="Henry, Max", isHidden=True),
+    ]
+    cust_correct = "SELECT name AS Customers FROM Customers LEFT JOIN Orders ON Customers.id = Orders.customerId WHERE Orders.customerId IS NULL;"
+    res = execute_sql_code(cust_correct, "customers-who-never-order", cust_tcs)
+    assert res["status"] == "Accepted", f"SQL customers-who-never-order expected Accepted, got {res['status']}"
+
+
 if __name__ == "__main__":
     print("Testing Python Judge...")
     test_two_sum_python()
@@ -209,4 +258,7 @@ if __name__ == "__main__":
     test_two_sum_java()
     print("Testing C++ Judge...")
     test_two_sum_cpp()
-    print("\nALL MULTI-LANGUAGE REAL JUDGE TESTS PASSED (Python, JS, Java, C++)!")
+    print("Testing SQL Judge...")
+    test_sql_judge()
+    print("\nALL MULTI-LANGUAGE REAL JUDGE TESTS PASSED (Python, JS, Java, C++, SQL)!")
+

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { API_URL } from "@/config";
+import { API_URL, getAuthToken, setAuthToken, getAuthUser, setAuthUser } from "@/config";
 
 export interface User {
   id: string;
@@ -13,6 +13,7 @@ export interface User {
   department?: string;
   college?: string;
   role?: string;
+  gender?: string;
 }
 
 interface AuthContextType {
@@ -21,7 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (fullName: string, email: string, password: string, department?: string, college?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (fullName: string, email: string, password: string, department?: string, college?: string, gender?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
 }
@@ -40,43 +41,26 @@ const DEMO_USER: User = {
   department: "Computer Science & Engineering",
   college: "SRM Institute of Science and Technology",
   role: "SDE Aspirant",
+  gender: "female",
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem("pm_user");
-    if (savedUser) {
-      try {
-        return JSON.parse(savedUser);
-      } catch {
-        return DEMO_USER;
-      }
-    }
-    return DEMO_USER;
+    return getAuthUser() || DEMO_USER;
   });
 
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem("pm_token") || "demo-token";
+    return getAuthToken() || "demo-token";
   });
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    if (user) {
-      localStorage.setItem("pm_user", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("pm_user");
-    }
+    setAuthUser(user);
   }, [user]);
 
   useEffect(() => {
-    if (token) {
-      localStorage.setItem("pm_token", token);
-      localStorage.setItem("placementor_token", token);
-    } else {
-      localStorage.removeItem("pm_token");
-      localStorage.removeItem("placementor_token");
-    }
+    setAuthToken(token);
   }, [token]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
@@ -89,7 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!response.ok) {
-        // Fallback for offline demo login
         if (email.toLowerCase().includes("test") || email.toLowerCase().includes("demo") || password.length >= 6) {
           const loggedInUser: User = {
             ...DEMO_USER,
@@ -115,13 +98,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         xp: DEMO_USER.xp,
         department: data.user?.department || DEMO_USER.department,
         college: data.user?.college || DEMO_USER.college,
+        gender: data.user?.gender || "",
       };
 
+      const receivedToken = data.access_token || data.token || "demo-jwt-token";
       setUser(authenticatedUser);
-      setToken(data.access_token || "demo-jwt-token");
+      setToken(receivedToken);
+      setAuthUser(authenticatedUser);
+      setAuthToken(receivedToken);
       return { success: true };
     } catch {
-      // Offline fallback
       const loggedInUser: User = {
         ...DEMO_USER,
         email: email.trim(),
@@ -140,7 +126,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     password: string,
     department?: string,
-    college?: string
+    college?: string,
+    gender?: string
   ): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     try {
@@ -151,11 +138,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           full_name: fullName.trim(),
           email: email.trim(),
           password,
+          gender: gender || "",
         }),
       });
 
       if (!response.ok) {
-        // Fallback for offline register
         const newUser: User = {
           id: `u-${Date.now()}`,
           name: fullName.trim(),
@@ -167,6 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           coins: 50,
           department: department || DEMO_USER.department,
           college: college || DEMO_USER.college,
+          gender: gender || "",
         };
         setUser(newUser);
         setToken("demo-jwt-token");
@@ -185,13 +173,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         coins: 50,
         department: department || DEMO_USER.department,
         college: college || DEMO_USER.college,
+        gender: data.user?.gender || gender || "",
       };
 
+      const receivedToken = data.access_token || data.token || "demo-jwt-token";
       setUser(newUser);
-      setToken(data.access_token || "demo-jwt-token");
+      setToken(receivedToken);
+      setAuthUser(newUser);
+      setAuthToken(receivedToken);
       return { success: true };
     } catch {
-      // Offline fallback
       const newUser: User = {
         id: `u-${Date.now()}`,
         name: fullName.trim(),
@@ -203,6 +194,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         coins: 50,
         department: department || DEMO_USER.department,
         college: college || DEMO_USER.college,
+        gender: gender || "",
       };
       setUser(newUser);
       setToken("demo-jwt-token");
@@ -210,15 +202,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem("pm_user");
-    localStorage.removeItem("pm_token");
-    localStorage.removeItem("placementor_token");
+    setAuthUser(null);
+    setAuthToken(null);
   };
 
   const updateUser = (userData: Partial<User>) => {

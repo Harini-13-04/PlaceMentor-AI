@@ -29,6 +29,7 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [department, setDepartment] = useState("Computer Science & Engineering");
   const [college, setCollege] = useState("SRM Institute of Science and Technology");
+  const [gender, setGender] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -51,10 +52,9 @@ export default function Register() {
       return;
     }
 
-
-    const res = await register(fullName, email, password, department, college);
+    const res = await register(fullName, email, password, department, college, gender);
     if (res.success) {
-      navigate("/home");
+      navigate("/onboarding");
     } else {
       setErrorMsg(res.error || "Registration failed. Try again.");
     }
@@ -158,6 +158,22 @@ export default function Register() {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-secondary/50 text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:border-purple-500 transition-all"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <UserIcon className="w-3.5 h-3.5 text-muted-foreground" /> Dashboard Avatar Preference <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+                </label>
+                <select
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-secondary/50 text-foreground text-xs focus:outline-none focus:border-purple-500 transition-all"
+                >
+                  <option value="">Prefer not to say (Neutral Dashboard Hero)</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

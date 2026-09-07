@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import ProfileMenu from "./ProfileMenu";
+import GlobalAIMentor from "./GlobalAIMentor";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { API_URL, getAuthHeaders, getAuthToken } from "@/config";
 import {
   Home,
   Code2,
@@ -24,19 +26,28 @@ import {
   ArrowRight,
   X,
   Target,
+  Bot,
+  Menu,
 } from "lucide-react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  
+  // Real stats
+  const [userStats, setUserStats] = useState({ streak: 0, points: 0 });
+  const [readinessScore, setReadinessScore] = useState<number | null>(null);
+  const [readinessStatus, setReadinessStatus] = useState<string>("In Progress");
+
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Navigation order specified in prompt
+  // Navigation order matching reference
   const navItems = [
     { name: "Home", path: "/home", icon: Home },
     { name: "Practice", path: "/practice", icon: Code2 },
@@ -44,11 +55,75 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: "Communication", path: "/communication", icon: MessageSquare },
     { name: "Resume", path: "/resume", icon: FileText },
     { name: "Readiness", path: "/placement-readiness", icon: BarChart3 },
-    { name: "Brain Zone", path: "/brain-zone", icon: BrainCircuit },
+    { name: "BrainZone", path: "/brain-zone", icon: BrainCircuit },
     { name: "Quizee", path: "/quizee", icon: HelpCircle },
+    { name: "AI Mentor", path: "/ai-mentor", icon: Bot },
+    { name: "Recommendations", path: "/recommendations", icon: Target },
   ];
 
-  // Global search keyboard shortcut listener ("/")
+  // Check onboarding status and fetch real user stats on mount
+  useEffect(() => {
+    const fetchStatusAndStats = async () => {
+      try {
+        const token = getAuthToken();
+        if (!token) return;
+
+        // 1. Check Onboarding — if not completed, navigate to full-screen /onboarding
+        const onbRes = await fetch(`${API_URL}/api/onboarding/status`, {
+          headers: getAuthHeaders(true),
+        });
+        if (onbRes.ok) {
+          const onbData = await onbRes.json();
+          if (!onbData.onboarding_completed && location.pathname !== "/onboarding") {
+            navigate("/onboarding", { replace: true });
+            return;
+          }
+        }
+
+        // 2. Fetch real Brain Zone XP / stats
+        const bzRes = await fetch(`${API_URL}/api/brainzone/progress`, {
+          headers: getAuthHeaders(true),
+        });
+        if (bzRes.ok) {
+          const bzData = await bzRes.json();
+          setUserStats({
+            streak: bzData.streak_days || 0,
+            points: bzData.xp || 0,
+          });
+        }
+
+        // 3. Fetch real Readiness Score
+        const readRes = await fetch(`${API_URL}/api/readiness`, {
+          headers: getAuthHeaders(true),
+        });
+        if (readRes.ok) {
+          const readData = await readRes.json();
+          if (readData.has_sufficient_data) {
+            setReadinessScore(readData.overall_readiness);
+            setReadinessStatus(
+              readData.overall_readiness >= 75
+                ? "Good Progress"
+                : readData.overall_readiness >= 40
+                ? "In Progress"
+                : "Needs Practice"
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Error loading user layout stats:", err);
+      }
+    };
+
+    fetchStatusAndStats();
+  }, [user, location.pathname]);
+
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setIsMobileDrawerOpen(false);
+  }, [location.pathname]);
+
+  // Global search keyboard shortcut ("/")
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "/" && !["INPUT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)) {
@@ -57,6 +132,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       } else if (e.key === "Escape") {
         setIsSearchOpen(false);
         setIsNotificationsOpen(false);
+        setIsMobileDrawerOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -64,7 +140,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   const searchResults = [
-    { title: "Two Sum", category: "Practice • Arrays", path: "/practice" },
+    { title: "Two Sum", category: "Practice • Arrays", path: "/practice/two-sum" },
+    { title: "AI Placement Mentor & RAG", category: "AI Mentor • Live Coaching", path: "/ai-mentor" },
+    { title: "Personalized Recommendations", category: "Recommendations • Action Items", path: "/recommendations" },
     { title: "Time & Work Shortcuts", category: "Aptitude • Quantitative", path: "/aptitude" },
     { title: "STAR Method Practice", category: "Communication • Behavioral", path: "/communication" },
     { title: "ATS Resume Scanner", category: "Resume • ATS Optimization", path: "/resume" },
@@ -78,10 +156,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden font-sans selection:bg-purple-500/20 selection:text-purple-400">
-      {/* 1. Global Leftmost Sidebar */}
+      {/* 1. Desktop Leftmost Sidebar (Hidden on Mobile < md) */}
       <aside
         style={{ width: isSidebarCollapsed ? "68px" : "240px" }}
-        className="border-r border-border bg-card flex flex-col z-20 shrink-0 transition-all duration-200 select-none relative shadow-sm"
+        className="hidden md:flex border-r border-border bg-card flex-col z-20 shrink-0 transition-all duration-200 select-none relative shadow-sm"
       >
         {/* Brand Header */}
         <div className="h-16 px-4 flex items-center justify-between border-b border-border">
@@ -116,81 +194,82 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Navigation Items (Exact 8 items) */}
-        <nav className="flex-1 overflow-y-auto p-2.5 space-y-1 scrollbar-none">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              title={isSidebarCollapsed ? item.name : undefined}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+        {/* Navigation Items */}
+        <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+
+            return (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                title={isSidebarCollapsed ? item.name : undefined}
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all group ${
                   isActive
-                    ? "bg-purple-600 text-white shadow-sm shadow-purple-600/30"
-                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                } ${isSidebarCollapsed ? "justify-center px-0" : ""}`
-              }
-            >
-              <item.icon className="w-4 h-4 shrink-0" />
-              {!isSidebarCollapsed && <span className="truncate">{item.name}</span>}
-            </NavLink>
-          ))}
-
-          {/* MY PROGRESS Circular Gauge Widget on Sidebar */}
-          {!isSidebarCollapsed && (
-            <div className="pt-4 px-1 pb-2">
-              <div className="p-3.5 rounded-xl border border-border bg-secondary/50 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">My Progress</span>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/25">Tier-1</span>
-                </div>
-
-                {/* Circular Gauge */}
-                <div className="flex items-center gap-3">
-                  <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-                    <svg className="w-12 h-12 -rotate-90" viewBox="0 0 36 36">
-                      <path
-                        className="text-border"
-                        strokeWidth="3.5"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                      <path
-                        className="text-purple-600 dark:text-purple-500"
-                        strokeDasharray="78, 100"
-                        strokeWidth="3.5"
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="none"
-                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                      />
-                    </svg>
-                    <div className="absolute text-center leading-none">
-                      <span className="text-xs font-mono font-bold text-foreground">78%</span>
-                    </div>
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-foreground truncate">Readiness Score</p>
-                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Good Progress</p>
-                  </div>
-                </div>
-
-                <NavLink
-                  to="/placement-readiness"
-                  className="w-full py-1.5 px-2.5 rounded-lg border border-border bg-card hover:bg-secondary text-[11px] font-semibold text-purple-700 dark:text-purple-300 flex items-center justify-center gap-1 transition-all"
-                >
-                  <span>View Full Progress</span>
-                  <ArrowRight className="w-3 h-3" />
-                </NavLink>
-              </div>
-            </div>
-          )}
+                    ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 font-bold shadow-sm border border-purple-500/25"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                } ${isSidebarCollapsed ? "justify-center px-0" : ""}`}
+              >
+                <Icon
+                  className={`w-4 h-4 shrink-0 transition-colors ${
+                    isActive ? "text-purple-600 dark:text-purple-400" : "text-muted-foreground group-hover:text-foreground"
+                  }`}
+                />
+                {!isSidebarCollapsed && <span className="truncate">{item.name}</span>}
+              </NavLink>
+            );
+          })}
         </nav>
 
-        {/* Sidebar Footer User Card */}
-        <div className="p-3 border-t border-border">
+        {/* MY PROGRESS Widget */}
+        {!isSidebarCollapsed && (
+          <div className="mx-3 mb-2 p-3 rounded-2xl bg-secondary/50 border border-border/80 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase font-mono">MY PROGRESS</span>
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">Tier-1</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                  <path
+                    className="text-muted/30"
+                    strokeWidth="3.5"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                  <path
+                    className="text-purple-600 dark:text-purple-400 transition-all duration-1000"
+                    strokeDasharray={`${readinessScore || 0}, 100`}
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    stroke="currentColor"
+                    fill="none"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  />
+                </svg>
+                <span className="absolute text-[10px] font-bold text-foreground font-mono">
+                  {readinessScore !== null ? `${readinessScore}%` : "0%"}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-foreground leading-tight">Readiness Score</p>
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{readinessStatus}</p>
+              </div>
+            </div>
+            <NavLink
+              to="/placement-readiness"
+              className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-semibold text-muted-foreground hover:text-foreground bg-card hover:bg-secondary border border-border transition-colors"
+            >
+              <span>View Full Progress</span>
+              <ArrowRight className="w-3 h-3" />
+            </NavLink>
+          </div>
+        )}
+
+        {/* User Card at bottom */}
+        <div className="p-3 border-t border-border bg-card">
           <NavLink
             to="/profile"
             title={isSidebarCollapsed ? user?.name || "Student Profile" : undefined}
@@ -198,87 +277,112 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               isSidebarCollapsed ? "justify-center px-0" : ""
             }`}
           >
-            <img
-              src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
-              alt="User"
-              className="w-8 h-8 rounded-full border border-purple-500/40 object-cover shrink-0"
-            />
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
+              {user?.name ? user.name.charAt(0).toUpperCase() : "S"}
+            </div>
             {!isSidebarCollapsed && (
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-foreground truncate">{user?.name || "Harini Muthuvel"}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{user?.department || "B.Tech CSE"}</p>
+                <p className="text-xs font-bold text-foreground truncate">{user?.name || "Student"}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{user?.department || user?.year || "Engineering"}</p>
               </div>
             )}
           </NavLink>
         </div>
       </aside>
 
-      {/* 2. Main Content Viewport Container */}
+
+      {/* 2. Mobile Drawer Navigation Overlay */}
+      {isMobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden flex">
+          <div className="w-72 bg-card border-r border-border h-full flex flex-col p-4 space-y-4 animate-in slide-in-from-left duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-500 flex items-center justify-center text-white font-bold text-xs">
+                  P
+                </div>
+                <span className="font-extrabold text-sm text-foreground">
+                  PlaceMentor <span className="text-purple-500">AI</span>
+                </span>
+              </div>
+              <button
+                onClick={() => setIsMobileDrawerOpen(false)}
+                className="p-1 rounded-lg text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <nav className="flex-1 overflow-y-auto space-y-1">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setIsMobileDrawerOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                      isActive
+                        ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 font-bold border border-purple-500/25"
+                        : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${isActive ? "text-purple-500" : ""}`} />
+                    <span>{item.name}</span>
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
+          <div className="flex-1" onClick={() => setIsMobileDrawerOpen(false)} />
+        </div>
+      )}
+
+      {/* 3. Main Content Viewport Container */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-background">
         {/* Top Header Bar */}
         <header className="h-16 border-b border-border bg-card/90 backdrop-blur-md sticky top-0 z-10 shrink-0">
-          <div className="h-full flex justify-between items-center px-4 sm:px-6 gap-4">
-            {/* Global Search Bar with "/" shortcut */}
+          <div className="h-full flex justify-between items-center px-4 sm:px-6 gap-3">
+            {/* Mobile Hamburger Button */}
+            <button
+              onClick={() => setIsMobileDrawerOpen(true)}
+              className="md:hidden p-2 rounded-xl border border-border bg-secondary/60 text-muted-foreground hover:text-foreground"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+
+            {/* Global Search Bar */}
             <div className="flex-1 max-w-md relative">
               <button
                 onClick={() => setIsSearchOpen(true)}
                 className="w-full pl-9 pr-8 py-2 rounded-xl border border-border bg-secondary/60 hover:bg-secondary text-left text-xs text-muted-foreground transition-all flex items-center justify-between shadow-sm cursor-text"
               >
-                <div className="flex items-center gap-2">
-                  <Search className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span>Search problems, topics, questions...</span>
+                <div className="flex items-center gap-2 truncate">
+                  <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span className="truncate">Search problems, topics, questions...</span>
                 </div>
-                <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-card border border-border rounded text-muted-foreground">
+                <kbd className="hidden sm:inline px-1.5 py-0.5 text-[10px] font-mono font-bold bg-card border border-border rounded text-muted-foreground">
                   /
                 </kbd>
               </button>
             </div>
 
-            {/* Top Bar Indicators: Streak, Points, Notifications & Profile */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            {/* Top Bar Indicators: Real Streak, Real Points, Theme & Profile */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               {/* Daily Streak Indicator */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold font-mono">
                 <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500 animate-pulse" />
-                <span className="hidden sm:inline">12 Day Streak</span>
-                <span className="sm:hidden">12d</span>
+                <span className="hidden sm:inline">{userStats.streak} Day Streak</span>
+                <span className="sm:hidden">{userStats.streak}d</span>
               </div>
 
               {/* Points Indicator */}
               <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300 text-xs font-bold font-mono">
                 <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-                <span className="hidden sm:inline">1820 Points</span>
-                <span className="sm:hidden">1820</span>
-              </div>
-
-              {/* Notifications Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                  aria-label="Notifications"
-                  className="p-2 rounded-xl border border-border bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors relative"
-                >
-                  <Bell className="w-4 h-4" />
-                  <span className="w-2 h-2 rounded-full bg-purple-500 absolute top-1.5 right-1.5 ring-2 ring-card" />
-                </button>
-
-                {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-border bg-card p-3 shadow-xl z-50 space-y-2">
-                    <div className="flex items-center justify-between pb-2 border-b border-border">
-                      <span className="text-xs font-bold text-foreground">Notifications</span>
-                      <span className="text-[10px] text-purple-600 dark:text-purple-400 cursor-pointer hover:underline">Mark all read</span>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="p-2.5 rounded-xl bg-secondary/50 space-y-0.5">
-                        <p className="font-semibold text-foreground">🎯 Today's Challenge Ready</p>
-                        <p className="text-[11px] text-muted-foreground">Data Interpretation challenge is waiting for your submission.</p>
-                      </div>
-                      <div className="p-2.5 rounded-xl bg-secondary/50 space-y-0.5">
-                        <p className="font-semibold text-foreground">🔥 Streak Protected</p>
-                        <p className="text-[11px] text-muted-foreground">You reached Day 12 streak! +50 bonus XP added.</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                <span className="hidden sm:inline">{userStats.points} XP</span>
+                <span className="sm:hidden">{userStats.points}</span>
               </div>
 
               {/* Theme Toggle Button */}
@@ -299,18 +403,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Page Viewport Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="w-full pb-12">
+          <div className="w-full pb-16">
             {children}
           </div>
         </main>
       </div>
 
-      {/* =========================================================================
-          GLOBAL SEARCH MODAL
-         ========================================================================= */}
+      {/* Global AI Mentor Component */}
+      <GlobalAIMentor />
+
+      {/* Global Search Modal */}
       {isSearchOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-4 space-y-4 shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-4 space-y-4 shadow-2xl animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-2.5 border-b border-border pb-3">
               <Search className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
               <input

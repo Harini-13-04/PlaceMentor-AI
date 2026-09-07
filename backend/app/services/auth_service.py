@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from app.database.mongodb import users_collection
+from app.database.mongodb import users_collection, learner_profiles_collection
 from app.models.user import User
 from app.core.security import hash_password, verify_password
 
@@ -14,6 +14,7 @@ async def create_user(
     year: str = "",
     skills: Optional[List[str]] = None,
     name: Optional[str] = None,
+    gender: Optional[str] = "",
 ):
     existing_user = await users_collection.find_one({"email": email.lower().strip()})
 
@@ -30,6 +31,7 @@ async def create_user(
         department=department.strip() if department else "",
         year=year.strip() if year else "",
         skills=skills or [],
+        gender=gender.strip() if gender else "",
         avatar="",
         bio="",
         phone="",
@@ -71,6 +73,13 @@ async def update_user_profile(user_id: str, update_data: Dict[str, Any]) -> Opti
         {"$set": clean_data},
         return_document=True,
     )
+
+    if "gender" in clean_data:
+        await learner_profiles_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"gender": clean_data["gender"]}}
+        )
+
     if result and "_id" in result:
         del result["_id"]
     if result and "password" in result:

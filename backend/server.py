@@ -2,6 +2,13 @@ from fastapi import FastAPI, APIRouter
 from app.api.auth import router as auth_router
 from app.api.users import router as users_router
 from app.api.resumes import router as resumes_router
+from app.api.mentors import router as mentors_router
+from app.api.recommendations import router as recommendations_router
+from app.api.onboarding import router as onboarding_router
+from app.api.problems import router as problems_router
+from app.api.assessments import router as assessments_router
+from app.api.brainzone import router as brainzone_router
+from app.api.readiness import router as readiness_router
 from routes.profile import router as profile_router
 from routes.execution import router as execution_router
 from dotenv import load_dotenv
@@ -31,6 +38,11 @@ db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
 app = FastAPI(title="PlaceMentor AI Backend")
+
+@app.get("/")
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "PlaceMentor AI Backend"}
 
 # Mount uploads for serving static assets like avatars
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
@@ -83,6 +95,13 @@ async def get_status_checks():
 api_router.include_router(auth_router)
 api_router.include_router(users_router)
 api_router.include_router(resumes_router)
+api_router.include_router(mentors_router)
+api_router.include_router(recommendations_router)
+api_router.include_router(onboarding_router)
+api_router.include_router(problems_router)
+api_router.include_router(assessments_router)
+api_router.include_router(brainzone_router)
+api_router.include_router(readiness_router)
 api_router.include_router(profile_router)
 api_router.include_router(execution_router)
 

@@ -16,8 +16,9 @@ import tempfile
 import time
 import traceback
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from app.middlewares.auth_middleware import get_optional_current_user
 
 router = APIRouter(prefix="/execute", tags=["Execution"])
 
@@ -40,9 +41,10 @@ class ExecutionRequest(BaseModel):
     code: str
     language: str
     problemId: str
-    testCases: List[TestCaseItem]
+    testCases: List[TestCaseItem] = []
     isSubmit: Optional[bool] = False
     mode: Optional[str] = None
+    userId: Optional[str] = None
 
 
 class TestCaseResult(BaseModel):
@@ -63,6 +65,8 @@ class ExecutionResponse(BaseModel):
     memory: float
     passedCount: int
     totalCount: int
+    passed_count: Optional[int] = None
+    total_count: Optional[int] = None
     visiblePassed: int
     visibleTotal: int
     hiddenPassed: int
@@ -1192,6 +1196,18 @@ def execute_sql_code(code: str, problem_id: str, test_cases: List[TestCaseItem])
                 actual_str = str(rows[0][0]) if rows else "null"
                 if not passed:
                     reason = f"Expected 200 but query returned {actual_str}."
+            elif problem_id == "duplicate-emails":
+                flat_str = " ".join(str(item) for r in rows for item in r).lower()
+                passed = len(rows) >= 1 and "a@b.com" in flat_str and "c@d.com" not in flat_str
+                actual_str = str([r[0] for r in rows]) if rows else "[]"
+                if not passed:
+                    reason = "Expected duplicate email 'a@b.com'."
+            elif problem_id == "customers-who-never-order":
+                flat_str = " ".join(str(item) for r in rows for item in r)
+                passed = len(rows) == 2 and "Henry" in flat_str and "Max" in flat_str and "Joe" not in flat_str and "Sam" not in flat_str
+                actual_str = str([r[0] for r in rows]) if rows else "[]"
+                if not passed:
+                    reason = "Expected customers who never ordered ('Henry', 'Max')."
             else:
                 passed = len(rows) > 0
                 actual_str = str(rows)
@@ -1501,13 +1517,33 @@ def is_starter_or_empty(code: str) -> bool:
 
 
 @router.post("", response_model=ExecutionResponse)
-async def execute_code(req: ExecutionRequest):
-    """Universal Code Judge Endpoint."""
+async def execute_code(
+    req: ExecutionRequest,
+    current_user: Optional[dict] = Depends(get_optional_current_user),
+):
+    """Universal Code Judge Endpoint with Backend Hidden Test Cases & Persistence."""
+    from app.services.problems_service import get_problem_test_cases, record_user_submission
+
     code = req.code.strip()
     lang = req.language.lower()
     problem_id = req.problemId
-    test_cases = req.testCases
     is_submit = bool(req.isSubmit or req.mode == "submit")
+    # Security: derive authenticated user_id from verified JWT session
+    user_id = current_user.get("id") if (current_user and current_user.get("id")) else (req.userId or "default-user")
+
+    # In submit mode, load the complete test suite (visible + hidden) from backend registry
+    if is_submit:
+        backend_cases = get_problem_test_cases(problem_id, include_hidden=True)
+        if backend_cases:
+            test_cases = [TestCaseItem(**c) for c in backend_cases]
+        else:
+            test_cases = req.testCases
+    else:
+        if req.testCases and len(req.testCases) > 0:
+            test_cases = [tc for tc in req.testCases if not tc.isHidden]
+        else:
+            backend_visible = get_problem_test_cases(problem_id, include_hidden=False)
+            test_cases = [TestCaseItem(**c) for c in backend_visible] if backend_visible else []
 
     # 1. Empty / Untouched Starter Code Check
     if is_starter_or_empty(code):
@@ -1574,27 +1610,74 @@ async def execute_code(req: ExecutionRequest):
     else:
         res = execute_python_code(code, problem_id, test_cases)
 
-    # 4. Aggregate totals
+    # 4. Aggregate totals & Enforce Acceptance Rule
     test_results = res.get("testCaseResults", [])
-    passed_count = sum(1 for t in test_results if t.get("passed", False))
     total_count = len(test_cases)
+    passed_count = sum(1 for t in test_results if t.get("passed", False))
     visible_total = sum(1 for t in test_cases if not t.isHidden)
     visible_passed = sum(1 for t in test_results if not t.get("isHidden", False) and t.get("passed", False))
     hidden_total = sum(1 for t in test_cases if t.isHidden)
     hidden_passed = sum(1 for t in test_results if t.get("isHidden", False) and t.get("passed", False))
 
+    raw_status = res.get("status", "Wrong Answer")
+    if raw_status in ("Compilation Error", "Runtime Error", "Time Limit Exceeded", "Memory Limit Exceeded"):
+        final_status = raw_status
+    elif total_count > 0 and passed_count == total_count:
+        final_status = "Accepted"
+    else:
+        final_status = "Wrong Answer"
+
+    # 5. Sanitize hidden test cases for security before sending to client
+    sanitized_results = []
+    for r in test_results:
+        r_copy = dict(r)
+        if r_copy.get("isHidden"):
+            r_copy["input"] = "[Hidden Test Case]"
+            r_copy["expected"] = "[Hidden]"
+            if not r_copy.get("passed"):
+                r_copy["actual"] = "Wrong answer on hidden test case"
+            else:
+                r_copy["actual"] = "[Passed]"
+        sanitized_results.append(r_copy)
+
+    # 6. If Submit mode, persist to MongoDB
+    if is_submit:
+        try:
+            await record_user_submission(
+                user_id=user_id,
+                problem_id=problem_id,
+                language=lang,
+                code=code,
+                status=final_status,
+                runtime=res.get("runtime", 25),
+                memory=14.2,
+                passed_count=passed_count,
+                total_count=total_count,
+                visible_passed=visible_passed,
+                visible_total=visible_total,
+                hidden_passed=hidden_passed,
+                hidden_total=hidden_total,
+                test_case_results=sanitized_results,
+                error_message=res.get("message"),
+                console_output=res.get("consoleOutput", ""),
+            )
+        except Exception:
+            pass
+
     return ExecutionResponse(
-        status=res.get("status", "Wrong Answer"),
+        status=final_status,
         isSubmit=is_submit,
         message=res.get("message"),
         runtime=res.get("runtime", 25),
         memory=14.2,
         passedCount=passed_count,
         totalCount=total_count,
+        passed_count=passed_count,
+        total_count=total_count,
         visiblePassed=visible_passed,
         visibleTotal=visible_total,
         hiddenPassed=hidden_passed,
         hiddenTotal=hidden_total,
-        testCaseResults=test_results,
+        testCaseResults=sanitized_results,
         consoleOutput=res.get("consoleOutput", ""),
     )

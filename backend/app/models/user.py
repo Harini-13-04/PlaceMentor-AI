@@ -22,6 +22,7 @@ class User(BaseModel):
     phone: str = ""
     github: str = ""
     linkedin: str = ""
+    gender: str = ""
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -11,6 +11,7 @@ class RegisterRequest(BaseModel):
     department: Optional[str] = ""
     year: Optional[str] = ""
     skills: Optional[List[str]] = Field(default_factory=list)
+    gender: Optional[str] = ""
 
 
 class LoginRequest(BaseModel):
@@ -34,6 +35,7 @@ class UserResponse(BaseModel):
     phone: str = ""
     github: str = ""
     linkedin: str = ""
+    gender: str = ""
 
 
 class TokenResponse(BaseModel):
@@ -54,6 +56,7 @@ class UserUpdateRequest(BaseModel):
     phone: Optional[str] = None
     github: Optional[str] = None
     linkedin: Optional[str] = None
+    gender: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):

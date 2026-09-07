@@ -20,6 +20,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+import { API_URL } from "@/config";
+
 interface AIMentorSidebarProps {
   problem: Problem;
   selectedLanguage: SupportedLanguage;
@@ -61,30 +63,57 @@ export default function AIMentorSidebar({
     }
   }, [messages, isThinking]);
 
+  const callRAGBackend = async (userPrompt: string, fallbackResponse: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/mentor/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: userPrompt,
+          context: {
+            problemTitle: problem.title,
+            problemTopic: problem.topic,
+            language: selectedLanguage,
+            code: currentCode,
+            executionStatus: executionResult?.status,
+            errorMessage: executionResult?.error,
+          },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.answer || fallbackResponse;
+      }
+    } catch {
+      // Fallback
+    }
+    return fallbackResponse;
+  };
+
   // Handle preset action clicks
-  const handleQuickPrompt = (actionType: "hint" | "explain" | "optimal" | "time" | "space") => {
+  const handleQuickPrompt = async (actionType: "hint" | "explain" | "optimal" | "time" | "space") => {
     let userPrompt = "";
-    let mentorResponse = "";
+    let localFallback = "";
 
     if (actionType === "hint") {
       const hints = problem.hints || ["Try to think about which data structure allows O(1) lookups."];
       const nextIdx = hintIndex % hints.length;
-      userPrompt = `Give me a hint (Hint ${nextIdx + 1})`;
-      mentorResponse = `💡 **Hint ${nextIdx + 1} of ${hints.length}:**\n\n${hints[nextIdx]}`;
+      userPrompt = `Give me a hint for ${problem.title} (Hint ${nextIdx + 1})`;
+      localFallback = `💡 **Hint ${nextIdx + 1} of ${hints.length}:**\n\n${hints[nextIdx]}`;
       setHintIndex((prev) => prev + 1);
     } else if (actionType === "explain") {
-      userPrompt = "Explain the approach to solve this problem";
-      mentorResponse = `🧠 **Problem Intuition & Methodology:**\n\n${problem.description.substring(0, 200)}...\n\n**Core Idea:** Break down the requirements into clear sub-problems. For **${problem.title}**, eliminate redundant computations using optimal data structures.`;
+      userPrompt = `Explain the approach and intuition to solve ${problem.title}`;
+      localFallback = `🧠 **Problem Intuition & Methodology:**\n\n${problem.description.substring(0, 200)}...\n\n**Core Idea:** Break down the requirements into clear sub-problems. For **${problem.title}**, eliminate redundant computations using optimal data structures.`;
     } else if (actionType === "optimal") {
-      userPrompt = "What is the optimal approach?";
+      userPrompt = `What is the optimal approach strategy for ${problem.title}?`;
       const approaches = problem.optimalApproach || ["Use an optimal hash map or two-pointer technique."];
-      mentorResponse = `⚡ **Optimal Strategy:**\n\n` + approaches.map((step, i) => `${i + 1}. ${step}`).join("\n");
+      localFallback = `⚡ **Optimal Strategy:**\n\n` + approaches.map((step, i) => `${i + 1}. ${step}`).join("\n");
     } else if (actionType === "time") {
-      userPrompt = "What is the time complexity?";
-      mentorResponse = `⏱ **Time Complexity Benchmark:**\n\n**${problem.timeComplexity || "O(n) runtime"}**\n\nThis is optimal because each input item is processed in constant amortized time.`;
+      userPrompt = `What is the optimal time complexity for ${problem.title}?`;
+      localFallback = `⏱ **Time Complexity Benchmark:**\n\n**${problem.timeComplexity || "O(n) runtime"}**\n\nThis is optimal because each input item is processed in constant amortized time.`;
     } else if (actionType === "space") {
-      userPrompt = "What is the space complexity?";
-      mentorResponse = `🔄 **Space Complexity Benchmark:**\n\n**${problem.spaceComplexity || "O(n) auxiliary space"}**\n\nAllocated for state storage and auxiliary data structures.`;
+      userPrompt = `What is the space complexity for ${problem.title}?`;
+      localFallback = `🔄 **Space Complexity Benchmark:**\n\n**${problem.spaceComplexity || "O(n) auxiliary space"}**\n\nAllocated for state storage and auxiliary data structures.`;
     }
 
     const newMsgId = String(Date.now());
@@ -94,17 +123,17 @@ export default function AIMentorSidebar({
     ]);
 
     setIsThinking(true);
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        { id: `${newMsgId}_m`, sender: "mentor", text: mentorResponse, timestamp: "Just now" },
-      ]);
-      setIsThinking(false);
-    }, 450);
+    const mentorAnswer = await callRAGBackend(userPrompt, localFallback);
+
+    setMessages((prev) => [
+      ...prev,
+      { id: `${newMsgId}_m`, sender: "mentor", text: mentorAnswer, timestamp: "Just now" },
+    ]);
+    setIsThinking(false);
   };
 
   // Handle user typed message
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
@@ -119,25 +148,24 @@ export default function AIMentorSidebar({
 
     setIsThinking(true);
 
-    setTimeout(() => {
-      let response = `I reviewed your code for **${problem.title}** (${selectedLanguage}). `;
+    let defaultFallback = `I reviewed your code for **${problem.title}** (${selectedLanguage}). `;
+    if (executionResult?.status === "Wrong Answer") {
+      defaultFallback += `Your last run returned **Wrong Answer**. Make sure you verify edge cases like duplicate elements or negative values, and ensure your return format strictly matches the specification.`;
+    } else if (executionResult?.status === "Runtime Error" || executionResult?.status === "Compilation Error") {
+      defaultFallback += `I noticed a **${executionResult.status}**. Check your variable declarations, array index boundaries, and language-specific syntax.`;
+    } else if (executionResult?.status === "Accepted") {
+      defaultFallback += `🎉 Great job passing the test cases! Think about whether you can further optimize space complexity or edge case handling.`;
+    } else {
+      defaultFallback += `You're on the right track! Break down the problem step-by-step. Feel free to click any quick prompt above for progressive hints or complexity guidance.`;
+    }
 
-      if (executionResult?.status === "Wrong Answer") {
-        response += `Your last run returned **Wrong Answer**. Make sure you verify edge cases like duplicate elements or negative values, and ensure your return format strictly matches the specification.`;
-      } else if (executionResult?.status === "Runtime Error" || executionResult?.status === "Compilation Error") {
-        response += `I noticed a **${executionResult.status}**. Check your variable declarations, array index boundaries, and language-specific syntax.`;
-      } else if (executionResult?.status === "Accepted") {
-        response += `🎉 Great job passing the test cases! Think about whether you can further optimize space complexity or edge case handling.`;
-      } else {
-        response += `You're on the right track! Break down the problem step-by-step. Feel free to click any quick prompt above for progressive hints or complexity guidance.`;
-      }
+    const mentorAnswer = await callRAGBackend(userText, defaultFallback);
 
-      setMessages((prev) => [
-        ...prev,
-        { id: `${newMsgId}_m`, sender: "mentor", text: response, timestamp: "Just now" },
-      ]);
-      setIsThinking(false);
-    }, 550);
+    setMessages((prev) => [
+      ...prev,
+      { id: `${newMsgId}_m`, sender: "mentor", text: mentorAnswer, timestamp: "Just now" },
+    ]);
+    setIsThinking(false);
   };
 
   return (

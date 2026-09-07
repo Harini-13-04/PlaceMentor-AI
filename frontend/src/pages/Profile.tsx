@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { API_URL, getAuthHeaders } from "@/config";
 import {
   User as UserIcon,
   Mail,
@@ -24,15 +25,29 @@ export default function Profile() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    name: user?.name || "Harini Muthuvel",
+    name: user?.name || user?.full_name || "Harini Muthuvel",
     email: user?.email || "harini.muthuvel@srmist.edu.in",
     department: user?.department || "Computer Science & Engineering",
     college: user?.college || "SRM Institute of Science and Technology",
     targetRole: "Full Stack Software Development Engineer",
-    github: "github.com/harini-m",
-    linkedin: "linkedin.com/in/harini-m",
-    bio: "Final-year CS student passionate about building scalable web systems, mastering DSA patterns, and preparing for product engineering roles.",
+    gender: user?.gender || "",
+    github: user?.github || "github.com/harini-m",
+    linkedin: user?.linkedin || "linkedin.com/in/harini-m",
+    bio: user?.bio || "Final-year CS student passionate about building scalable web systems, mastering DSA patterns, and preparing for product engineering roles.",
   });
+
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        name: user.name || user.full_name || prev.name,
+        email: user.email || prev.email,
+        department: user.department || prev.department,
+        college: user.college || prev.college,
+        gender: user.gender || prev.gender,
+      }));
+    }
+  }, [user]);
 
   const [skills, setSkills] = useState([
     "Python", "JavaScript", "TypeScript", "React", "Node.js",
@@ -40,12 +55,29 @@ export default function Profile() {
   ]);
   const [newSkill, setNewSkill] = useState("");
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    try {
+      await fetch(`${API_URL}/api/users/me`, {
+        method: "PATCH",
+        headers: getAuthHeaders(true),
+        body: JSON.stringify({
+          name: formData.name,
+          department: formData.department,
+          college: formData.college,
+          gender: formData.gender,
+          bio: formData.bio,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to update profile:", err);
+    }
+
     updateUser({
       name: formData.name,
       department: formData.department,
       college: formData.college,
+      gender: formData.gender,
     });
     setIsEditing(false);
   };
@@ -220,6 +252,20 @@ export default function Profile() {
                   onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                   className="w-full mt-1 px-3 py-2 rounded-xl border border-border bg-secondary text-foreground outline-none focus:border-purple-500"
                 />
+              </div>
+
+              <div>
+                <label className="text-muted-foreground font-semibold">Gender Preference (for personalized dashboard illustration)</label>
+                <select
+                  value={formData.gender}
+                  onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 rounded-xl border border-border bg-secondary text-foreground outline-none focus:border-purple-500"
+                >
+                  <option value="">Prefer not to say (Neutral)</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other (Neutral)</option>
+                </select>
               </div>
 
               <div>

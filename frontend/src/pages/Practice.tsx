@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { PROBLEMS_DATASET, TOP_COMPANIES, Problem, getProblemById } from "@/data/problems";
 import PracticeWorkspace from "@/components/practice/PracticeWorkspace";
+import { API_URL, getAuthHeaders } from "@/config";
 import {
   Search,
   CheckCircle2,
@@ -28,6 +29,35 @@ export default function Practice() {
   const { problemId: routeProblemId } = useParams();
   const navigate = useNavigate();
   const [problems, setProblems] = useState<Problem[]>(PROBLEMS_DATASET);
+
+  // Fetch real problem catalog and user status from backend
+  useEffect(() => {
+    const fetchBackendProblems = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/problems`, {
+          headers: getAuthHeaders(true),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.problems && data.problems.length > 0) {
+            // Merge with local dataset to ensure starter codes & metadata are intact
+            const backendMap = new Map(data.problems.map((p: any) => [p.id, p]));
+            setProblems((prev) =>
+              prev.map((p) => {
+                const b = backendMap.get(p.id);
+                return b ? { ...p, status: b.status || p.status, attemptsCount: b.attemptsCount || 0 } : p;
+              })
+            );
+          }
+        }
+      } catch (err) {
+        console.warn("Using offline problem dataset:", err);
+      }
+    };
+
+    fetchBackendProblems();
+  }, []);
   
   // Read problem ID from route param or query string if available
   const urlProblemId = routeProblemId || searchParams.get("id") || searchParams.get("problem");
@@ -241,69 +271,32 @@ export default function Practice() {
   return (
     <div className="w-full space-y-6 font-sans text-foreground">
       {/* =========================================================================
-          1. TOP HERO SECTION & PLACEMENT ROADMAP (Full Width Layout)
+          1. PRACTICE HEADER & QUICK STATS (Problem Discovery First)
          ========================================================================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Main Hero Card */}
-        <div className="lg:col-span-8 p-6 sm:p-7 rounded-2xl border border-purple-500/25 bg-gradient-to-br from-purple-500/10 via-card to-card dark:from-purple-950/40 dark:via-secondary dark:to-card shadow-sm relative overflow-hidden flex flex-col justify-between">
-          <div className="space-y-2.5 relative z-10">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300 text-xs font-semibold">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Campus Coding Arena</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground font-display">
-              Level up your skills.
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground font-medium max-w-lg leading-relaxed">
-              Crack placements with confidence. Solve company-tagged algorithms & data structure challenges with multi-language starter templates.
-            </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0">
+            <Code2 className="w-5 h-5" />
           </div>
-
-          <div className="pt-6 relative z-10">
-            <button
-              onClick={() => handleSelectProblem(problems[0]?.id || "two-sum")}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition-all pm-btn-gradient"
-            >
-              <span>Start Practicing</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
+              Coding Practice
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Choose a problem and start coding. Solve company-tagged DSA challenges with multi-language starter templates.
+            </p>
           </div>
         </div>
 
-        {/* Placement Roadmap Milestone Card */}
-        <div className="lg:col-span-4 p-5 rounded-2xl border border-border bg-card shadow-sm flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-600 dark:text-purple-400 text-xs">
-                <Compass className="w-3.5 h-3.5" />
-              </span>
-              <h3 className="text-xs font-bold text-foreground">Placement Roadmap</h3>
-            </div>
-            <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">23 days left</span>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="px-3.5 py-1.5 rounded-xl bg-card border border-border text-xs font-semibold flex items-center gap-2 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span className="text-muted-foreground">Solved:</span>
+            <span className="font-bold text-purple-600 dark:text-purple-400 font-mono">
+              {problems.filter((p) => p.status === "Solved").length}
+            </span>
+            <span className="text-muted-foreground font-mono">/ {problems.length}</span>
           </div>
-
-          <div className="space-y-2">
-            <p className="text-[11px] text-muted-foreground uppercase font-bold tracking-wider">Your next milestone</p>
-            <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-              <span className="text-amber-500 dark:text-amber-400">⚡</span>
-              <span>Aptitude Mock Test</span>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="space-y-1 pt-1">
-              <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-amber-500 to-purple-600 rounded-full" style={{ width: "40%" }} />
-              </div>
-            </div>
-          </div>
-
-          <Link
-            to="/placement-readiness"
-            className="w-full py-2 px-3 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
-          >
-            <span>Continue Roadmap</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
         </div>
       </div>
 

@@ -87,7 +87,7 @@ describe("Full E2E Workspace & Navigation Flow", () => {
     );
 
     // 1. Problem List is rendered
-    expect(screen.getByText(/Campus Coding Arena/i)).toBeInTheDocument();
+    expect(screen.getByText(/Coding Practice/i)).toBeInTheDocument();
     expect(screen.getByText(/Two Sum/i)).toBeInTheDocument();
 
     // 2. Open Two Sum problem
@@ -111,7 +111,7 @@ describe("Full E2E Workspace & Navigation Flow", () => {
 
     const submissionsTab = screen.getByRole("button", { name: "Submissions" });
     fireEvent.click(submissionsTab);
-    expect(screen.getByText("Accepted")).toBeInTheDocument();
+    expect(screen.getByText("No submissions yet")).toBeInTheDocument();
 
     const descriptionTab = screen.getByRole("button", { name: "Description" });
     fireEvent.click(descriptionTab);
@@ -152,6 +152,6 @@ describe("Full E2E Workspace & Navigation Flow", () => {
     const backBtn = screen.getByTitle("Back to Problem List");
     fireEvent.click(backBtn);
 
-    expect(screen.getByText(/Campus Coding Arena/i)).toBeInTheDocument();
+    expect(screen.getByText(/Coding Practice/i)).toBeInTheDocument();
   }, 15000);
 });

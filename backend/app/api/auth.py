@@ -34,6 +34,7 @@ async def register(request: RegisterRequest):
         department=request.department or "",
         year=request.year or "",
         skills=request.skills or [],
+        gender=request.gender or "",
     )
 
     if user is None:
@@ -58,6 +59,7 @@ async def register(request: RegisterRequest):
         "phone": user.phone or "",
         "github": user.github or "",
         "linkedin": user.linkedin or "",
+        "gender": user.gender or "",
     }
 
     return {
@@ -97,6 +99,7 @@ async def login(request: LoginRequest):
         "phone": user.get("phone", ""),
         "github": user.get("github", ""),
         "linkedin": user.get("linkedin", ""),
+        "gender": user.get("gender", ""),
     }
 
     return {
@@ -123,6 +126,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "phone": current_user.get("phone", ""),
         "github": current_user.get("github", ""),
         "linkedin": current_user.get("linkedin", ""),
+        "gender": current_user.get("gender", ""),
     }
 
 

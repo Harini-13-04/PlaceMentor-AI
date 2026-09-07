@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
+import { API_URL, getAuthHeaders } from "@/config";
+
 import { Problem, PROBLEMS_DATASET, getStarterCode } from "@/data/problems";
 import { useTheme } from "@/context/ThemeContext";
 import IDECodeEditor, { ExecutionResult } from "./IDECodeEditor";
@@ -80,17 +82,27 @@ export function PracticeWorkspace({
   const [isConsoleCollapsed, setIsConsoleCollapsed] = useState(false);
 
   // Submissions list
-  const [submissionsList, setSubmissionsList] = useState([
-    {
-      id: 1,
-      status: "Accepted",
-      language: isSqlProblem ? "SQL" : "Python 3",
-      runtime: "38 ms",
-      memory: "15.9 MB",
-      date: "Just now",
-      notes: "Beats 89.4% in runtime",
-    },
-  ]);
+  const [submissionsList, setSubmissionsList] = useState<any[]>([]);
+
+  // Fetch real submissions for this problem from backend
+  const fetchSubmissions = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/problems/${problem.id}/submissions`, {
+        headers: getAuthHeaders(true),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSubmissionsList(data.submissions || []);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch problem submissions:", err);
+    }
+  };
+
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, [problem.id]);
 
   // Handle language switch with isolated per-(problem, language) drafts
   const handleLanguageChange = (newLang: SupportedLanguage) => {
@@ -261,23 +273,11 @@ export function PracticeWorkspace({
       setExecutionResult(result);
 
       if (result.status === "Accepted") {
-        setSubmissionsList((prev) => [
-          {
-            id: prev.length + 1,
-            status: "Accepted",
-            language: selectedLanguage === "python3" ? "Python 3" : selectedLanguage,
-            runtime: `${result.runtime} ms`,
-            memory: `${result.memory} MB`,
-            date: "Just now",
-            notes: "Beats 92.4% in runtime",
-          },
-          ...prev,
-        ]);
-
         if (onProblemSolved) {
           onProblemSolved(problem.id);
         }
       }
+      await fetchSubmissions();
     } catch {
       setExecutionResult({
         status: "Execution Error",
@@ -677,26 +677,45 @@ export function PracticeWorkspace({
               {/* Submissions Tab */}
               {activeLeftTab === "submissions" && (
                 <div className="space-y-3 text-xs">
-                  <div className={`rounded-xl border overflow-hidden ${isLight ? "border-slate-200 bg-white" : "border-[#1E2638] bg-[#141923]"}`}>
-                    <table className="w-full text-left text-xs">
-                      <thead className={`${isLight ? "bg-slate-100 text-slate-600 border-b border-slate-200" : "bg-[#10141D] text-[#94A3B8] border-b border-[#1E2638]"} text-[10px] uppercase font-bold`}>
-                        <tr>
-                          <th className="py-2.5 px-3">Status</th>
-                          <th className="py-2.5 px-3">Runtime</th>
-                          <th className="py-2.5 px-3">Memory</th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y font-mono ${isLight ? "divide-slate-200" : "divide-[#1E2638]"}`}>
-                        {submissionsList.map((s) => (
-                          <tr key={s.id} className={isLight ? "hover:bg-slate-50" : "hover:bg-[#161D2B]"}>
-                            <td className="py-2.5 px-3 font-bold text-emerald-500">{s.status}</td>
-                            <td className={`py-2.5 px-3 ${isLight ? "text-slate-700" : "text-[#CBD5E1]"}`}>{s.runtime}</td>
-                            <td className={`py-2.5 px-3 ${isLight ? "text-slate-700" : "text-[#CBD5E1]"}`}>{s.memory}</td>
+                  {submissionsList.length === 0 ? (
+                    <div className={`p-6 rounded-2xl border border-dashed text-center space-y-1.5 ${isLight ? "border-slate-200 bg-slate-50" : "border-[#1E2638] bg-[#141923]"}`}>
+                      <p className={`font-bold ${isLight ? "text-slate-900" : "text-white"}`}>No submissions yet</p>
+                      <p className={`text-[11px] ${isLight ? "text-slate-500" : "text-[#94A3B8]"}`}>
+                        Submit your solution to execute both visible and backend-only hidden test cases.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className={`rounded-xl border overflow-hidden ${isLight ? "border-slate-200 bg-white" : "border-[#1E2638] bg-[#141923]"}`}>
+                      <table className="w-full text-left text-xs">
+                        <thead className={`${isLight ? "bg-slate-100 text-slate-600 border-b border-slate-200" : "bg-[#10141D] text-[#94A3B8] border-b border-[#1E2638]"} text-[10px] uppercase font-bold`}>
+                          <tr>
+                            <th className="py-2.5 px-3">Status</th>
+                            <th className="py-2.5 px-3">Language</th>
+                            <th className="py-2.5 px-3">Runtime</th>
+                            <th className="py-2.5 px-3">Tests Passed</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className={`divide-y font-mono ${isLight ? "divide-slate-200" : "divide-[#1E2638]"}`}>
+                          {submissionsList.map((s, idx) => (
+                            <tr key={s.id || s.submission_id || idx} className={isLight ? "hover:bg-slate-50" : "hover:bg-[#161D2B]"}>
+                              <td className={`py-2.5 px-3 font-bold ${s.status === "Accepted" ? "text-emerald-500" : "text-rose-500"}`}>
+                                {s.status}
+                              </td>
+                              <td className={`py-2.5 px-3 ${isLight ? "text-slate-700" : "text-[#CBD5E1]"}`}>
+                                {s.language}
+                              </td>
+                              <td className={`py-2.5 px-3 ${isLight ? "text-slate-700" : "text-[#CBD5E1]"}`}>
+                                {s.runtime !== undefined ? `${s.runtime} ms` : "-"}
+                              </td>
+                              <td className={`py-2.5 px-3 ${isLight ? "text-slate-700" : "text-[#CBD5E1]"}`}>
+                                {s.passed_count !== undefined ? `${s.passed_count}/${s.total_count}` : "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

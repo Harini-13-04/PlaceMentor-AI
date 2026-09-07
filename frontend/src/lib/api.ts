@@ -1,4 +1,4 @@
-import { API_URL } from "../config";
+import { API_URL, getAuthToken, setAuthToken } from "../config";
 
 interface RequestOptions extends RequestInit {
   token?: string | null;
@@ -10,10 +10,7 @@ export async function apiRequest<T = unknown>(
 ): Promise<T> {
   const { token, headers: customHeaders, ...restOptions } = options;
 
-  const storedToken =
-    token !== undefined
-      ? token
-      : localStorage.getItem("pm_token") || localStorage.getItem("placementor_token");
+  const storedToken = token !== undefined ? token : getAuthToken();
 
   const headers: HeadersInit = {
     ...customHeaders,
@@ -39,10 +36,10 @@ export async function apiRequest<T = unknown>(
 
   if (!response.ok) {
     if (response.status === 401) {
-      localStorage.removeItem("pm_token");
-      localStorage.removeItem("placementor_token");
+      setAuthToken(null);
     }
     let errorMessage = `HTTP Error ${response.status}: ${response.statusText}`;
+
     try {
       const errorData = await response.json();
       if (errorData?.detail) {

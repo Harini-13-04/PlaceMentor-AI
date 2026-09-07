@@ -7,7 +7,8 @@
 import { Problem, TestCase } from "@/data/problems";
 import { ExecutionResult } from "@/components/practice/IDECodeEditor";
 import { SupportedLanguage, getBackendLanguageId } from "@/config/languages";
-import { API_URL } from "@/config";
+import { API_URL, getAuthHeaders, getAuthUser } from "@/config";
+
 
 export interface ExecutionParams {
   code: string;
@@ -227,24 +228,27 @@ export async function executeCodeSubmissionAsync(params: ExecutionParams): Promi
   }
 
   try {
+    const user = getAuthUser();
+    const userId = user?.id || "default-user";
+
     const response = await fetch(`${API_URL}/api/execute`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getAuthHeaders(true),
       body: JSON.stringify({
         code,
         language: getBackendLanguageId(language),
         problemId: problem.id,
-        testCases: testCases.map((tc) => ({
+        testCases: (problem.testCases || []).map((tc) => ({
           input: tc.input,
           expectedOutput: tc.expectedOutput,
-          isHidden: tc.isHidden || false,
+          isHidden: false,
         })),
         isSubmit,
         mode: isSubmit ? "submit" : "run",
+        userId,
       }),
     });
+
 
     if (!response.ok) {
       throw new Error(`Server returned status ${response.status}`);
