@@ -9,6 +9,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import GitHubCallback from "./pages/GitHubCallback";
 import Landing from "./pages/Landing";
 import Onboarding from "./pages/Onboarding";
 import Home from "./pages/Home";
@@ -45,6 +46,7 @@ const App = () => (
               <Route path="/landing" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/auth/github/callback" element={<GitHubCallback />} />
 
               {/* Dedicated Full-Screen Onboarding Route (No Layout/Dashboard behind it) */}
               <Route

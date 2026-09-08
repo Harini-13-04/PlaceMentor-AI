@@ -23,6 +23,10 @@ class GoogleAuthRequest(BaseModel):
     credential: str
 
 
+class GitHubAuthRequest(BaseModel):
+    code: str
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
