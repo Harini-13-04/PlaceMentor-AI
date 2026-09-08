@@ -13,4 +13,6 @@ SECRET_KEY = os.getenv("SECRET_KEY", "d88bae1b269d698ce339c2ccb2e0d8ff380266513b
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "1009934034032-1o0fi6dtrkbtsh9u5dml93iui3sptghc.apps.googleusercontent.com")
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "Ov23liQChGtU3XriYdui")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 
