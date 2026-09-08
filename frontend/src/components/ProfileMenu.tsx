@@ -10,11 +10,18 @@ import {
 } from "lucide-react";
 
 
+import { getMediaUrl } from "@/pages/Profile";
+
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatar]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -32,17 +39,20 @@ export default function ProfileMenu() {
     navigate("/login");
   };
 
+  const resolvedAvatar = user?.avatar ? getMediaUrl(user.avatar) : "";
+
   return (
     <div className="relative font-sans" ref={menuRef}>
       {/* Profile Trigger Button */}
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 border border-border bg-card hover:bg-secondary transition-colors"
+        className="flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 border border-border bg-card hover:bg-secondary transition-colors cursor-pointer"
       >
-        {user?.avatar ? (
+        {resolvedAvatar && !avatarError ? (
           <img
-            src={user.avatar}
+            src={resolvedAvatar}
             alt="Profile"
+            onError={() => setAvatarError(true)}
             className="w-7 h-7 rounded-full border border-purple-500/40 object-cover"
           />
         ) : (
@@ -68,10 +78,11 @@ export default function ProfileMenu() {
         <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-border bg-card shadow-2xl overflow-hidden z-50 animate-fade-in">
           {/* Header */}
           <div className="p-3.5 border-b border-border bg-secondary/40 flex items-center gap-3">
-            {user?.avatar ? (
+            {resolvedAvatar && !avatarError ? (
               <img
-                src={user.avatar}
+                src={resolvedAvatar}
                 alt="Profile"
+                onError={() => setAvatarError(true)}
                 className="w-9 h-9 rounded-full border border-purple-500/40 object-cover"
               />
             ) : (
