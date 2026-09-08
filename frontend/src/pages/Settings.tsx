@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { API_URL, getAuthHeaders } from "@/config";
 import {
   User,
   Sun,
@@ -15,16 +16,43 @@ export default function Settings() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
-  const [name, setName] = useState(user?.name || "Harini Muthuvel");
-  const [department, setDepartment] = useState(user?.department || "Computer Science & Engineering");
-  const [college, setCollege] = useState(user?.college || "SRM Institute of Science and Technology");
-
+  const [name, setName] = useState(user?.name || user?.full_name || "");
+  const [department, setDepartment] = useState(user?.department || "");
+  const [college, setCollege] = useState(user?.college || "");
+  const [gender, setGender] = useState(user?.gender || "");
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (user) {
+      setName(user.name || user.full_name || "");
+      setDepartment(user.department || "");
+      setCollege(user.college || "");
+      setGender(user.gender || "");
+    }
+  }, [user]);
 
-  const handleSaveAccount = (e: React.FormEvent) => {
+  const handleSaveAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateUser({ name, department, college });
+    setSaving(true);
+    try {
+      await fetch(`${API_URL}/api/users/me`, {
+        method: "PATCH",
+        headers: getAuthHeaders(true),
+        body: JSON.stringify({
+          name: name.trim(),
+          department: department.trim(),
+          college: college.trim(),
+          gender: gender,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save settings to backend:", err);
+    } finally {
+      setSaving(false);
+    }
+
+    updateUser({ name: name.trim(), department: department.trim(), college: college.trim(), gender: gender });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
   };
@@ -75,7 +103,8 @@ export default function Settings() {
               <input
                 type="email"
                 disabled
-                value={user?.email || "harini.muthuvel@srmist.edu.in"}
+                value={user?.email || ""}
+                placeholder="No email set"
                 className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-border bg-secondary/50 text-muted-foreground cursor-not-allowed font-mono"
               />
             </div>
@@ -98,6 +127,19 @@ export default function Settings() {
                 onChange={(e) => setCollege(e.target.value)}
                 className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-border bg-secondary text-foreground outline-none focus:border-purple-500 font-medium"
               />
+            </div>
+
+            <div>
+              <label className="text-muted-foreground font-semibold">Gender / Hero Illustration</label>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full mt-1 px-3.5 py-2.5 rounded-xl border border-border bg-secondary text-foreground outline-none focus:border-purple-500 font-medium cursor-pointer"
+              >
+                <option value="">Neutral / Unspecified Illustration</option>
+                <option value="female">Female Placement Hero Illustration</option>
+                <option value="male">Male Placement Hero Illustration</option>
+              </select>
             </div>
           </div>
 

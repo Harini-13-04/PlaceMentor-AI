@@ -28,6 +28,7 @@ interface PracticeWorkspaceProps {
   onBackToList: () => void;
   onSelectProblem?: (problemId: string) => void;
   onProblemSolved?: (problemId: string) => void;
+  onProblemAttempted?: (problemId: string) => void;
 }
 
 export function PracticeWorkspace({
@@ -35,6 +36,7 @@ export function PracticeWorkspace({
   onBackToList,
   onSelectProblem,
   onProblemSolved,
+  onProblemAttempted,
 }: PracticeWorkspaceProps) {
   const { theme } = useTheme();
 
@@ -275,6 +277,10 @@ export function PracticeWorkspace({
       if (result.status === "Accepted") {
         if (onProblemSolved) {
           onProblemSolved(problem.id);
+        }
+      } else {
+        if (onProblemAttempted) {
+          onProblemAttempted(problem.id);
         }
       }
       await fetchSubmissions();

@@ -39,15 +39,21 @@ export default function ProfileMenu() {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 border border-border bg-card hover:bg-secondary transition-colors"
       >
-        <img
-          src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
-          alt="Profile"
-          className="w-7 h-7 rounded-full border border-purple-500/40 object-cover"
-        />
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt="Profile"
+            className="w-7 h-7 rounded-full border border-purple-500/40 object-cover"
+          />
+        ) : (
+          <div className="w-7 h-7 rounded-full border border-purple-500/40 bg-purple-500/10 flex items-center justify-center font-bold text-xs text-purple-600 dark:text-purple-400">
+            {(user?.name || user?.full_name || "U")[0].toUpperCase()}
+          </div>
+        )}
 
         <div className="hidden sm:block text-left">
-          <p className="text-xs font-bold text-foreground leading-tight">{user?.name || "Student"}</p>
-          <p className="text-[10px] text-muted-foreground">{user?.department || "CSE"}</p>
+          <p className="text-xs font-bold text-foreground leading-tight">{user?.name || user?.full_name || "Student"}</p>
+          <p className="text-[10px] text-muted-foreground">{user?.department || "General Track"}</p>
         </div>
 
         <ChevronDown
@@ -62,14 +68,20 @@ export default function ProfileMenu() {
         <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-border bg-card shadow-2xl overflow-hidden z-50 animate-fade-in">
           {/* Header */}
           <div className="p-3.5 border-b border-border bg-secondary/40 flex items-center gap-3">
-            <img
-              src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
-              alt="Profile"
-              className="w-9 h-9 rounded-full border border-purple-500/40 object-cover"
-            />
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt="Profile"
+                className="w-9 h-9 rounded-full border border-purple-500/40 object-cover"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full border border-purple-500/40 bg-purple-500/10 flex items-center justify-center font-bold text-sm text-purple-600 dark:text-purple-400 shrink-0">
+                {(user?.name || user?.full_name || "U")[0].toUpperCase()}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-foreground truncate">{user?.name || "Harini Muthuvel"}</p>
-              <p className="text-[10px] text-muted-foreground truncate font-mono">{user?.email || "harini.muthuvel@srmist.edu.in"}</p>
+              <p className="text-xs font-bold text-foreground truncate">{user?.name || user?.full_name || "Candidate"}</p>
+              <p className="text-[10px] text-muted-foreground truncate font-mono">{user?.email || ""}</p>
             </div>
           </div>
 

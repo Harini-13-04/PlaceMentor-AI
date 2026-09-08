@@ -73,38 +73,24 @@ export default function PlacementReadiness() {
     fetchAllReadiness();
   }, []);
 
-  const getCompetencyIcon = (category: string) => {
-    switch (category) {
-      case "Coding & DSA":
-        return Code2;
-      case "Aptitude":
-        return Calculator;
-      case "Core CS":
-        return Target;
-      case "Resume Quality":
-        return FileText;
-      case "Communication":
-        return MessageSquare;
-      default:
-        return Sparkles;
-    }
+  const getCompetencyIcon = (category: string = "") => {
+    const c = category.toLowerCase();
+    if (c.includes("coding") || c.includes("dsa")) return Code2;
+    if (c.includes("aptitude") || c.includes("quantitative")) return Calculator;
+    if (c.includes("cs") || c.includes("core")) return Target;
+    if (c.includes("resume")) return FileText;
+    if (c.includes("communication") || c.includes("behavioral")) return MessageSquare;
+    return Sparkles;
   };
 
-  const getCompetencyRoute = (category: string) => {
-    switch (category) {
-      case "Coding & DSA":
-        return "/practice";
-      case "Aptitude":
-        return "/aptitude";
-      case "Core CS":
-        return "/quizee";
-      case "Resume Quality":
-        return "/resume";
-      case "Communication":
-        return "/communication";
-      default:
-        return "/dashboard";
-    }
+  const getCompetencyRoute = (category: string = "") => {
+    const c = category.toLowerCase();
+    if (c.includes("coding") || c.includes("dsa")) return "/practice";
+    if (c.includes("aptitude") || c.includes("quantitative")) return "/aptitude";
+    if (c.includes("cs") || c.includes("core")) return "/quizee";
+    if (c.includes("resume")) return "/resume";
+    if (c.includes("communication") || c.includes("behavioral")) return "/communication";
+    return "/practice";
   };
 
   return (

@@ -7,14 +7,63 @@ export interface User {
   full_name?: string;
   email: string;
   avatar?: string;
+  banner_image?: string;
   level?: number;
   xp?: number;
   coins?: number;
   department?: string;
   college?: string;
+  year?: string;
   role?: string;
   gender?: string;
+  bio?: string;
+  phone?: string;
+  location?: string;
+  website?: string;
+  github?: string;
+  linkedin?: string;
+  dob?: string;
+  target_role?: string;
+  target_company?: string;
+  skills?: string[];
+  preferred_languages?: string[];
+  programming_level?: string;
+  dsa_level?: string;
+  aptitude_level?: string;
+  core_cs_level?: string;
 }
+
+export const mapAuthUserData = (userData: any): User => ({
+  id: userData.id || "",
+  name: userData.name || userData.full_name || userData.email?.split("@")[0] || "Student",
+  full_name: userData.full_name || userData.name || "",
+  email: userData.email || "",
+  avatar: userData.avatar || "",
+  banner_image: userData.banner_image || "",
+  level: userData.level || 1,
+  xp: userData.xp || 0,
+  coins: userData.coins || 0,
+  department: userData.department || "",
+  college: userData.college || "",
+  year: userData.year || "",
+  role: userData.target_role || "SDE Aspirant",
+  gender: userData.gender || "",
+  bio: userData.bio || "",
+  phone: userData.phone || "",
+  location: userData.location || "",
+  website: userData.website || "",
+  github: userData.github || "",
+  linkedin: userData.linkedin || "",
+  dob: userData.dob || "",
+  target_role: userData.target_role || "",
+  target_company: userData.target_company || "",
+  skills: Array.isArray(userData.skills) ? userData.skills : [],
+  preferred_languages: Array.isArray(userData.preferred_languages) ? userData.preferred_languages : [],
+  programming_level: userData.programming_level || "",
+  dsa_level: userData.dsa_level || "",
+  aptitude_level: userData.aptitude_level || "",
+  core_cs_level: userData.core_cs_level || "",
+});
 
 interface AuthContextType {
   user: User | null;
@@ -37,43 +86,52 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEMO_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80";
-
-const DEMO_USER: User = {
-  id: "u-demo-101",
-  name: "Harini Muthuvel",
-  full_name: "Harini Muthuvel",
-  email: "harini.muthuvel@srmist.edu.in",
-  avatar: DEMO_AVATAR,
-  level: 12,
-  xp: 4500,
-  coins: 540,
-  department: "Computer Science & Engineering",
-  college: "SRM Institute of Science and Technology",
-  role: "SDE Aspirant",
-  gender: "female",
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(() => {
-    return getAuthToken() || localStorage.getItem("pm_token") || localStorage.getItem("placementor_token") || null;
+    return getAuthToken();
   });
 
   const [user, setUser] = useState<User | null>(() => {
-    const cachedUser = getAuthUser();
-    if (cachedUser) return cachedUser;
-    const savedUser = localStorage.getItem("pm_user");
-    if (savedUser) {
-      try {
-        return JSON.parse(savedUser);
-      } catch {
-        return null;
-      }
-    }
-    return null;
+    return getAuthUser();
   });
 
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Validate active token with /api/auth/me on mount or token change
+  useEffect(() => {
+    const validateSession = async () => {
+      const activeToken = token || getAuthToken();
+      if (!activeToken) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${activeToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          const authenticatedUser = mapAuthUserData(userData);
+          setUser(authenticatedUser);
+          setAuthUser(authenticatedUser);
+        } else {
+          // Token is invalid or expired
+          logout();
+        }
+      } catch (err) {
+        console.warn("Session verification network issue:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    validateSession();
+  }, [token]);
 
   useEffect(() => {
     setAuthUser(user);
@@ -107,49 +165,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        if (email.toLowerCase().includes("test") || email.toLowerCase().includes("demo") || password.length >= 6) {
-          const loggedInUser: User = {
-            ...DEMO_USER,
-            email: email.trim(),
-            name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-          };
-          setUser(loggedInUser);
-          setToken("demo-jwt-token");
-          return { success: true };
-        }
         return { success: false, error: data.detail || "Invalid email or password" };
       }
 
-      const authenticatedUser: User = {
-        id: data.user?.id || `u-${Date.now()}`,
-        name: data.user?.name || data.user?.full_name || email.split("@")[0],
-        full_name: data.user?.full_name || data.user?.name,
-        email: data.user?.email || email,
-        avatar: data.user?.avatar || DEMO_AVATAR,
-        level: data.user?.level || DEMO_USER.level,
-        xp: data.user?.xp || DEMO_USER.xp,
-        coins: data.user?.coins || 50,
-        department: data.user?.department || DEMO_USER.department,
-        college: data.user?.college || DEMO_USER.college,
-        role: "SDE Aspirant",
-        gender: data.user?.gender || "",
-      };
+      const receivedToken = data.access_token || data.token;
+      if (!receivedToken) {
+        return { success: false, error: "Authentication failed: No access token received" };
+      }
 
-      const receivedToken = data.access_token || data.token || "demo-jwt-token";
+      const authenticatedUser = mapAuthUserData(data.user || {});
       setUser(authenticatedUser);
       setToken(receivedToken);
       setAuthUser(authenticatedUser);
       setAuthToken(receivedToken);
       return { success: true };
-    } catch {
-      const loggedInUser: User = {
-        ...DEMO_USER,
-        email: email.trim(),
-        name: email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      };
-      setUser(loggedInUser);
-      setToken("demo-jwt-token");
-      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: "Unable to connect to authentication server. Please check your network and try again." };
     } finally {
       setIsLoading(false);
     }
@@ -225,48 +256,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        return { success: false, error: data.detail || "Email already registered or invalid details" };
+        return { success: false, error: data.detail || "Email already registered or invalid registration details" };
       }
 
-      const newUser: User = {
-        id: data.user?.id || `u-${Date.now()}`,
-        name: fullName.trim(),
-        full_name: fullName.trim(),
-        email: email.trim(),
-        avatar: DEMO_AVATAR,
-        level: 1,
-        xp: 100,
-        coins: 50,
-        department: department || "Computer Science & Engineering",
-        college: college || "Placement Candidate",
-        role: "SDE Aspirant",
-        gender: data.user?.gender || gender || "",
-      };
+      const newUser = mapAuthUserData(data.user || {});
+      const receivedToken = data.access_token || data.token;
+      if (!receivedToken) {
+        return { success: false, error: "Registration succeeded but no access token was returned" };
+      }
 
-      const receivedToken = data.access_token || data.token || "demo-jwt-token";
       setUser(newUser);
       setToken(receivedToken);
       setAuthUser(newUser);
       setAuthToken(receivedToken);
       return { success: true };
-    } catch {
-      const newUser: User = {
-        id: `u-${Date.now()}`,
-        name: fullName.trim(),
-        full_name: fullName.trim(),
-        email: email.trim(),
-        avatar: DEMO_AVATAR,
-        level: 1,
-        xp: 100,
-        coins: 50,
-        department: department || DEMO_USER.department,
-        college: college || DEMO_USER.college,
-        role: "SDE Aspirant",
-        gender: gender || "",
-      };
-      setUser(newUser);
-      setToken("demo-jwt-token");
-      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: "Unable to connect to registration server. Please check your network and try again." };
     } finally {
       setIsLoading(false);
     }
@@ -281,6 +286,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem("placementor_token");
     localStorage.removeItem("pm_user");
     localStorage.removeItem("placementor_auth_user");
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
   };
 
   const updateUser = (userData: Partial<User>) => {
@@ -313,3 +321,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

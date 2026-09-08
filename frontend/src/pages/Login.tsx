@@ -185,7 +185,7 @@ export default function Login() {
 
             <button
               type="button"
-              onClick={() => setErrorMsg("GitHub authentication service connected. Please use email & password for demo access.")}
+              onClick={() => setErrorMsg("GitHub OAuth is in development. Please log in using your registered email and password.")}
               className="w-full py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700/60 bg-slate-50 dark:bg-[#141728]/60 hover:bg-slate-100 dark:hover:bg-[#1a1e34] text-slate-800 dark:text-white text-xs font-medium flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               <svg className="w-4 h-4 shrink-0 fill-current text-slate-800 dark:text-white" viewBox="0 0 24 24">

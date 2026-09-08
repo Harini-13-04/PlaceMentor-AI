@@ -180,7 +180,8 @@ async def get_user_recommendations(user_id: str = "default-user") -> Recommendat
     if recent_assessments:
         total_acc = round(sum(a.get("accuracy", 0) for a in recent_assessments) / len(recent_assessments), 1)
 
-    streak_days = brain_prog.get("streak_days", 0) if brain_prog else 0
+    from app.services.streak_service import calculate_user_streak
+    streak_days = await calculate_user_streak(user_id)
 
     return RecommendationResponse(
         recommendations=recommendations[:3] if has_activity else [],  # Strictly maximum 2-3 items, empty if no activity

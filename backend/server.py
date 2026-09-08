@@ -28,9 +28,10 @@ from datetime import datetime, timezone
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# Ensure uploads directory exists
+# Ensure uploads directories exist
 UPLOAD_DIR = ROOT_DIR / "uploads"
 (UPLOAD_DIR / "avatars").mkdir(parents=True, exist_ok=True)
+(UPLOAD_DIR / "banners").mkdir(parents=True, exist_ok=True)
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']

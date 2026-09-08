@@ -123,6 +123,16 @@ export default function Home() {
   const avgAccuracy = hasAssessments
     ? Math.round(assessmentHistory.reduce((acc, curr) => acc + (curr.accuracy || 0), 0) / assessmentHistory.length)
     : null;
+  const accuracyTrendLabel = hasAssessments && assessmentHistory.length > 1
+    ? (() => {
+        const latest = assessmentHistory[0]?.accuracy || 0;
+        const prev = assessmentHistory[1]?.accuracy || 0;
+        const diff = Math.round(latest - prev);
+        return diff >= 0 ? `+${diff}% vs prior test` : `${diff}% vs prior test`;
+      })()
+    : hasAssessments
+    ? `${assessmentHistory.length} test completed`
+    : "No assessments taken";
 
   // Real Streak & XP
   const currentStreak = brainProgress?.streak_days || 0;
@@ -365,7 +375,7 @@ export default function Home() {
             </span>
           </div>
           <p className="text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-400 font-medium truncate">
-            {hasAssessments ? `+4% from last week` : "No assessments taken"}
+            {accuracyTrendLabel}
           </p>
         </div>
 
@@ -431,14 +441,16 @@ export default function Home() {
             </div>
             <div className="min-w-0">
               <p className="text-xs sm:text-sm font-extrabold text-foreground font-mono">
-                {latestAccuracy !== null ? `${latestAccuracy}%` : "0%"}
+                {latestAccuracy !== null ? `${latestAccuracy}%` : "Not Assessed"}
               </p>
               <p className="text-[9px] sm:text-[10px] text-muted-foreground font-mono truncate">
-                Time: {formattedDuration}
+                {latestAttempt ? `Time: ${formattedDuration}` : "No attempts yet"}
               </p>
             </div>
           </div>
-          <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate">Daily Accuracy</p>
+          <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate">
+            {latestAttempt ? "Latest Assessment" : "Take your first test"}
+          </p>
         </div>
       </div>
 

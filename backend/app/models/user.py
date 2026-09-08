@@ -17,12 +17,23 @@ class User(BaseModel):
     department: str = ""
     year: str = ""
     skills: List[str] = Field(default_factory=list)
+    preferred_languages: List[str] = Field(default_factory=list)
     avatar: str = ""
+    banner_image: str = ""
     bio: str = ""
     phone: str = ""
+    location: str = ""
+    website: str = ""
     github: str = ""
     linkedin: str = ""
     gender: str = ""
+    dob: str = ""
+    target_role: str = ""
+    target_company: str = ""
+    programming_level: str = ""
+    dsa_level: str = ""
+    aptitude_level: str = ""
+    core_cs_level: str = ""
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

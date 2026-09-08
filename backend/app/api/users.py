@@ -13,6 +13,8 @@ from app.services.auth_service import (
     update_user_profile,
     update_user_avatar,
     remove_user_avatar,
+    update_user_banner,
+    remove_user_banner,
 )
 from app.middlewares.auth_middleware import get_current_user
 
@@ -20,6 +22,9 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 UPLOAD_DIR = Path(__file__).parent.parent.parent / "uploads" / "avatars"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+BANNER_DIR = Path(__file__).parent.parent.parent / "uploads" / "banners"
+BANNER_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -113,6 +118,79 @@ async def upload_avatar(
 async def delete_avatar(current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
     updated_user = await remove_user_avatar(user_id)
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    display_name = updated_user.get("name") or updated_user.get("full_name") or ""
+    updated_user["name"] = display_name
+    updated_user["full_name"] = display_name
+    return updated_user
+
+
+@router.post("/me/banner", response_model=UserResponse)
+async def upload_banner(
+    request: Request,
+    banner_file: Optional[UploadFile] = File(None),
+    banner_url: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user),
+):
+    user_id = current_user["id"]
+    saved_url = ""
+
+    if banner_file and banner_file.filename:
+        content_type = banner_file.content_type or ""
+        if not (content_type.startswith("image/") or banner_file.filename.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"))):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File must be an image",
+            )
+
+        ext = Path(banner_file.filename).suffix or ".jpg"
+        filename = f"banner_{user_id}_{int(time.time())}{ext}"
+        dest_path = BANNER_DIR / filename
+
+        with open(dest_path, "wb") as buffer:
+            shutil.copyfileobj(banner_file.file, buffer)
+
+        saved_url = f"/uploads/banners/{filename}"
+    elif banner_url:
+        saved_url = banner_url.strip()
+    else:
+        try:
+            body = await request.json()
+            if body and "banner_url" in body and body["banner_url"]:
+                saved_url = body["banner_url"].strip()
+            elif body and "banner_image" in body and body["banner_image"]:
+                saved_url = body["banner_image"].strip()
+        except Exception:
+            pass
+
+    if not saved_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Banner file or banner_url is required",
+        )
+
+    updated_user = await update_user_banner(user_id, saved_url)
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    display_name = updated_user.get("name") or updated_user.get("full_name") or ""
+    updated_user["name"] = display_name
+    updated_user["full_name"] = display_name
+    return updated_user
+
+
+@router.delete("/me/banner", response_model=UserResponse)
+async def delete_banner(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
+    updated_user = await remove_user_banner(user_id)
     if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
