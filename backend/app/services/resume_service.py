@@ -414,6 +414,8 @@ def parse_resume_text_to_schema(text: str, filename: str) -> dict:
                 if cur_edu:
                     education_list.append(cur_edu)
                 inst = line.strip()
+                g_match = re.search(r'\b(\d+(\.\d+)?\s*%|\d+(\.\d+)?\s*cgpa|\d+(\.\d+)?\s*gpa|(gpa|cgpa|grade|marks|score)\s*:?\s*\d+(\.\d+)?(%|\s*cgpa|\s*gpa)?)\b', line, re.IGNORECASE)
+                ext_grade = g_match.group(0) if g_match else ""
                 cur_edu = {
                     "id": str(uuid.uuid4()),
                     "institution": inst,
@@ -422,13 +424,19 @@ def parse_resume_text_to_schema(text: str, filename: str) -> dict:
                     "start_date": "",
                     "end_date": "",
                     "current": False,
-                    "gpa": "",
+                    "gpa": ext_grade,
+                    "grade": ext_grade,
                     "description": line
                 }
             else:
                 if cur_edu:
                     if not cur_edu["degree"] and any(k in line.lower() for k in ["bachelor", "master", "b.e", "b.tech", "m.tech", "bs", "ms", "phd", "degree", "diploma"]):
                         cur_edu["degree"] = line.strip()
+                    if not cur_edu["grade"]:
+                        g_match = re.search(r'\b(\d+(\.\d+)?\s*%|\d+(\.\d+)?\s*cgpa|\d+(\.\d+)?\s*gpa|(gpa|cgpa|grade|marks|score)\s*:?\s*\d+(\.\d+)?(%|\s*cgpa|\s*gpa)?)\b', line, re.IGNORECASE)
+                        if g_match:
+                            cur_edu["grade"] = g_match.group(0)
+                            cur_edu["gpa"] = g_match.group(0)
                     if cur_edu["description"]:
                         cur_edu["description"] += " | " + line.strip()
                     else:

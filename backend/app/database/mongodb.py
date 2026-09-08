@@ -15,3 +15,5 @@ learner_profiles_collection = db["learner_profiles"]
 communication_sessions_collection = db["communication_sessions"]
 gd_rooms_collection = db["gd_rooms"]
 gd_evaluations_collection = db["gd_evaluations"]
+aptitude_progress_collection = db["aptitude_progress"]
+

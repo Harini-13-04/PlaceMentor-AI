@@ -1,5 +1,6 @@
 import uuid
 import logging
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, WebSocket, WebSocketDisconnect
@@ -34,6 +35,7 @@ async def analyze_speech_recording(
     target_duration: Optional[int] = Form(90),
     actual_duration: Optional[int] = Form(0),
     is_silent: Optional[bool] = Form(False),
+    attempt_id: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -80,7 +82,11 @@ async def analyze_speech_recording(
     else:
         mime_type = raw_mime
 
-    logger.info(f"Received audio speech upload: filename={file.filename}, size={len(audio_bytes)} bytes, mime_type={mime_type}")
+    received_sha256 = hashlib.sha256(audio_bytes).hexdigest()
+    logger.info(
+        f"Received audio speech upload: filename={file.filename}, attempt_id={attempt_id or 'N/A'}, "
+        f"size={len(audio_bytes)} bytes, mime_type={mime_type}, sha256={received_sha256}"
+    )
 
     analysis_res = await analyze_speech_audio(
         audio_bytes=audio_bytes,
@@ -90,6 +96,7 @@ async def analyze_speech_recording(
         target_duration=target_duration or 90,
         actual_duration=actual_duration or 0,
         is_silent=bool(is_silent),
+        attempt_id=attempt_id,
     )
 
     # Persist completed analysis session to MongoDB
@@ -324,6 +331,62 @@ async def get_gd_room_status(
     return GDRoomResponse(**room_dict)
 
 
+@router.post("/gd/rooms/{room_id}/speak/start", response_model=GDRoomResponse, status_code=status.HTTP_200_OK)
+async def start_gd_speaking_turn(
+    room_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Acquire server single active speaker lock for current user.
+    """
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+    room_dict = await gd_room_manager.start_speaking_turn(room_id=room_id, user_id=user_id)
+    room_dict["is_host"] = (room_dict["host_user_id"] == user_id)
+    return GDRoomResponse(**room_dict)
+
+
+@router.post("/gd/rooms/{room_id}/speak/stop", response_model=GDRoomResponse, status_code=status.HTTP_200_OK)
+async def stop_gd_speaking_turn(
+    room_id: str,
+    file: UploadFile = File(None),
+    turn_id: Optional[str] = Form(None),
+    duration_seconds: Optional[float] = Form(1.0),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Release speaking turn, save recorded audio segment, and advance fair rotation priority queue.
+    """
+    user_id = current_user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+        )
+
+    audio_bytes = b""
+    mime_type = "audio/webm"
+    if file:
+        audio_bytes = await file.read()
+        mime_type = file.content_type or "audio/webm"
+
+    room_dict = await gd_room_manager.stop_speaking_turn(
+        room_id=room_id,
+        user_id=user_id,
+        audio_bytes=audio_bytes,
+        mime_type=mime_type,
+        duration_seconds=duration_seconds or 1.0,
+        turn_id=turn_id,
+    )
+    room_dict["is_host"] = (room_dict["host_user_id"] == user_id)
+    return GDRoomResponse(**room_dict)
+
+
+
 @router.websocket("/gd/ws/{room_id}")
 async def gd_websocket_endpoint(
     websocket: WebSocket,
@@ -445,8 +508,13 @@ async def evaluate_gd_participant(
         strengths=eval_res.get("strengths", []),
         suggestions=eval_res.get("suggestions", []),
         data_limitations=eval_res.get("data_limitations", []),
+        winning_team=eval_res.get("winning_team"),
+        winning_rationale=eval_res.get("winning_rationale"),
+        team_evaluations=eval_res.get("team_evaluations", {}),
+        participant_evaluations=eval_res.get("participant_evaluations", []),
         created_at=now_iso,
     )
+
 
     # 4. Save to MongoDB
     try:

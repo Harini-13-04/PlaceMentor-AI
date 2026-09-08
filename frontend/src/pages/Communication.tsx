@@ -101,6 +101,18 @@ export default function Communication() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingStartTimeRef = useRef<number>(0);
+  const activeAttemptIdRef = useRef<string | null>(null);
+  const inFlightAnalysisRef = useRef<boolean>(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const maxVolumeRef = useRef<number>(0);
+  const animFrameRef = useRef<number | null>(null);
+
+  const [recordingMeta, setRecordingMeta] = useState<{
+    attemptId: string;
+    sizeKb: number;
+    mimeType: string;
+    sha256?: string;
+  } | null>(null);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [historySessions, setHistorySessions] = useState<any[]>([]);
@@ -308,8 +320,10 @@ export default function Communication() {
     setSpeakingTimer(0);
     setSpeakingFeedback(null);
     setAudioUrl(null);
+    setRecordingMeta(null);
     setMicError(null);
     setSelectedHistoryId(null);
+    activeAttemptIdRef.current = null;
     setSpeakingSubView("practice");
   };
 
@@ -322,16 +336,24 @@ export default function Communication() {
     setSpeakingSubView("catalog");
   };
 
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const maxVolumeRef = useRef<number>(0);
-  const animFrameRef = useRef<number | null>(null);
+  const analyzeAudioRecording = async (
+    blob: Blob,
+    duration: number,
+    mimeType: string,
+    attemptId: string,
+    clientSha256?: string
+  ) => {
+    if (inFlightAnalysisRef.current) {
+      console.warn("Analysis request already in flight. Preventing duplicate submission.");
+      return;
+    }
 
-  const analyzeAudioRecording = async (blob: Blob, duration: number, mimeType: string, isSilent: boolean) => {
     if (!blob || blob.size === 0) {
       setMicError("Recording was empty. Please speak into your microphone and try again.");
       return;
     }
 
+    inFlightAnalysisRef.current = true;
     setIsAnalyzing(true);
     setSpeakingFeedback(null);
     setSelectedHistoryId(null);
@@ -340,12 +362,12 @@ export default function Communication() {
     try {
       const formData = new FormData();
       const extension = mimeType.includes("mp4") ? "mp4" : mimeType.includes("wav") ? "wav" : "webm";
-      formData.append("file", blob, `speech_recording.${extension}`);
+      formData.append("file", blob, `speech_recording_${attemptId.slice(0, 8)}.${extension}`);
       formData.append("prompt_title", selectedPrompt.title);
       formData.append("prompt_category", selectedPrompt.category);
       formData.append("target_duration", selectedPrompt.timeLimit.toString());
       formData.append("actual_duration", duration.toString());
-      formData.append("is_silent", isSilent ? "true" : "false");
+      formData.append("attempt_id", attemptId);
 
       const response = await apiRequest<{
         id?: string;
@@ -368,7 +390,14 @@ export default function Communication() {
         body: formData,
       });
 
-      const isNoSpeech = response.transcript === "[No speech detected]" || response.overall_score === 0;
+      // Stale state check: ignore response if user started a newer recording attempt
+      if (activeAttemptIdRef.current !== attemptId) {
+        console.warn(`Ignoring stale response for attempt ID ${attemptId}`);
+        inFlightAnalysisRef.current = false;
+        return;
+      }
+
+      const isNoSpeech = response.transcript === "[No clear speech detected]" || response.transcript === "[No speech detected]" || response.overall_score === 0;
 
       setSpeakingFeedback({
         fluency: isNoSpeech ? 0 : response.fluency,
@@ -387,14 +416,18 @@ export default function Communication() {
       }
       fetchHistory();
     } catch (err: any) {
-      console.error("Speech analysis error:", err);
-      let userMessage = err.message || "Unable to analyze your recording right now. Please try again.";
-      if (userMessage.includes("503") || userMessage.includes("high demand") || userMessage.includes("UNAVAILABLE")) {
-        userMessage = "AI Speech Analysis service is temporarily experiencing high demand from the AI provider. Please wait a moment and try again.";
+      if (activeAttemptIdRef.current !== attemptId) {
+        inFlightAnalysisRef.current = false;
+        return;
       }
+      console.error("Speech analysis error:", err);
+      const userMessage = err.message || "Could not reach the Gemini AI service. Your recording was captured successfully.";
       setMicError(userMessage);
     } finally {
-      setIsAnalyzing(false);
+      inFlightAnalysisRef.current = false;
+      if (activeAttemptIdRef.current === attemptId) {
+        setIsAnalyzing(false);
+      }
     }
   };
 
@@ -410,6 +443,18 @@ export default function Communication() {
       }
 
       try {
+        // Generate fresh unique attempt ID for this attempt
+        const newAttemptId = crypto.randomUUID();
+        activeAttemptIdRef.current = newAttemptId;
+        inFlightAnalysisRef.current = false;
+
+        // Clear previous state immediately
+        setSpeakingFeedback(null);
+        setAudioUrl(null);
+        setAudioBlob(null);
+        setRecordingMeta(null);
+        setSelectedHistoryId(null);
+
         // 2. Request microphone permission upon explicit user action
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
@@ -474,11 +519,11 @@ export default function Communication() {
             audioContextRef.current = null;
           }
 
+          const attemptId = activeAttemptIdRef.current || crypto.randomUUID();
           const mimeType = mediaRecorder.mimeType || "audio/webm";
           const blob = new Blob(audioChunksRef.current, { type: mimeType });
           const elapsedSecs = Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000));
           const recordedDuration = elapsedSecs;
-          const isSilent = blob.size < 500 || recordedDuration <= 1;
 
           setAudioBlob(blob);
 
@@ -493,8 +538,30 @@ export default function Communication() {
             mediaStreamRef.current = null;
           }
 
-          // Trigger real AI speech analysis API with recorded audio & silence flag
-          analyzeAudioRecording(blob, recordedDuration, mimeType, isSilent);
+          // Calculate SHA-256 hash of recorded audio bytes for audit verification
+          blob
+            .arrayBuffer()
+            .then((buffer) => crypto.subtle.digest("SHA-256", buffer))
+            .then((hashBuffer) => {
+              const hashArray = Array.from(new Uint8Array(hashBuffer));
+              const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+              setRecordingMeta({
+                attemptId,
+                sizeKb: Math.round(blob.size / 1024),
+                mimeType,
+                sha256: hashHex,
+              });
+              analyzeAudioRecording(blob, recordedDuration, mimeType, attemptId, hashHex);
+            })
+            .catch((err) => {
+              console.warn("Could not compute client SHA-256 hash:", err);
+              setRecordingMeta({
+                attemptId,
+                sizeKb: Math.round(blob.size / 1024),
+                mimeType,
+              });
+              analyzeAudioRecording(blob, recordedDuration, mimeType, attemptId);
+            });
         };
 
         recordingStartTimeRef.current = Date.now();
@@ -502,7 +569,6 @@ export default function Communication() {
         setIsRecording(true);
         setSpeakingTimer(0);
         setHasRecorded(false);
-        setSpeakingFeedback(null);
       } catch (err: any) {
         console.error("Microphone access error:", err);
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
@@ -540,20 +606,32 @@ export default function Communication() {
     is_connected: boolean;
     joined_at: string;
     is_speaking: boolean;
+    team?: string | null;
+    total_speaking_seconds?: number;
+    turn_count?: number;
+    last_turn_at?: string | null;
   };
 
   type GDRoomState = {
     room_id: string;
     topic: string;
-    status: "waiting" | "active" | "ended";
+    status: "waiting" | "active" | "evaluating" | "ended";
     host_user_id: string;
     max_participants: number;
+    min_participants: number;
     created_at: string;
     started_at?: string | null;
     ended_at?: string | null;
     duration_seconds: number;
+    discussion_ends_at?: string | null;
     participants: GDParticipantState[];
+    teams?: Record<string, string[]>;
+    current_speaker_id?: string | null;
+    current_speaker_name?: string | null;
+    next_speaker_id?: string | null;
     is_host?: boolean;
+    evaluation_summary?: any;
+    winning_team?: string | null;
   };
 
   const [gdStep, setGdStep] = useState<"lobby" | "waiting" | "live" | "feedback">("lobby");
@@ -566,12 +644,50 @@ export default function Communication() {
   const [gdError, setGdError] = useState<string | null>(null);
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
   const [isJoiningRoom, setIsJoiningRoom] = useState(false);
-  const [gdTimerRemaining, setGdTimerRemaining] = useState<number>(900);
+  const [gdTimerRemaining, setGdTimerRemaining] = useState<number>(300);
+
+  // GD Speaking Turn Recording State
+  const [isGdSpeaking, setIsGdSpeaking] = useState(false);
+  const gdMediaStreamRef = useRef<MediaStream | null>(null);
+  const gdMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const gdAudioChunksRef = useRef<Blob[]>([]);
+  const gdTurnStartTimeRef = useRef<number>(0);
 
   // GD AI Evaluation State
   type GDEvalDimension = {
     score: number | null;
     reason: string;
+  };
+
+  type GDParticipantEval = {
+    user_id: string;
+    display_name: string;
+    team: string;
+    overall_score: number | null;
+    speaking_seconds: number;
+    turn_count: number;
+    fluency: number | null;
+    clarity: number | null;
+    pace: number | null;
+    topic_relevance: number | null;
+    reasoning: number | null;
+    communication: number | null;
+    transcript: string;
+    strengths: string[];
+    improvements: string[];
+  };
+
+  type GDTeamEval = {
+    team_name: string;
+    members: string[];
+    team_score: number;
+    avg_communication_score: number;
+    argument_quality: number;
+    collaboration_score: number;
+    total_speaking_seconds: number;
+    total_turns: number;
+    strengths: string[];
+    weaknesses: string[];
   };
 
   type GDEvalData = {
@@ -584,11 +700,34 @@ export default function Communication() {
     strengths: string[];
     suggestions: string[];
     data_limitations: string[];
+    winning_team?: string | null;
+    winning_rationale?: string | null;
+    team_evaluations?: Record<string, GDTeamEval>;
+    participant_evaluations?: GDParticipantEval[];
     created_at: string;
   };
 
   const [isEvaluatingGd, setIsEvaluatingGd] = useState(false);
   const [gdEvaluationData, setGdEvaluationData] = useState<GDEvalData | null>(null);
+
+  // Room Rejoin / Refresh Restoration
+  useEffect(() => {
+    const savedCode = sessionStorage.getItem("active_gd_room_code");
+    if (savedCode && activeTab === "gd" && gdStep === "lobby") {
+      apiRequest<GDRoomState>(`/api/communication/gd/rooms/${savedCode}`)
+        .then((room) => {
+          if (room && room.status !== "ended") {
+            setActiveRoomData(room);
+            setGdRoomCode(room.room_id);
+            setGdStep(room.status === "active" ? "live" : "waiting");
+            connectGDWebSocket(room.room_id);
+          }
+        })
+        .catch(() => {
+          sessionStorage.removeItem("active_gd_room_code");
+        });
+    }
+  }, [activeTab]);
 
   const handleFetchGdEvaluation = async () => {
     if (!gdRoomCode) return;
@@ -653,17 +792,15 @@ export default function Communication() {
     };
   }, []);
 
-  // Server-authoritative timer countdown effect
+  // Server-authoritative 5-minute timer countdown effect
   useEffect(() => {
     let interval: NodeJS.Timeout | number;
-    if (gdStep === "live" && activeRoomData?.started_at) {
-      const startTime = new Date(activeRoomData.started_at).getTime();
-      const totalDuration = activeRoomData.duration_seconds || 900;
+    if (gdStep === "live" && activeRoomData?.discussion_ends_at) {
+      const endsTime = new Date(activeRoomData.discussion_ends_at).getTime();
 
       interval = setInterval(() => {
         const now = new Date().getTime();
-        const elapsedSecs = Math.floor((now - startTime) / 1000);
-        const remaining = Math.max(0, totalDuration - elapsedSecs);
+        const remaining = Math.max(0, Math.floor((endsTime - now) / 1000));
         setGdTimerRemaining(remaining);
 
         if (remaining <= 0 && activeRoomData.host_user_id === user?.id) {
@@ -685,12 +822,13 @@ export default function Communication() {
         body: JSON.stringify({
           topic: topicToUse,
           max_participants: 6,
-          duration_minutes: 15,
+          duration_minutes: 5,
         }),
       });
 
       setActiveRoomData(room);
       setGdRoomCode(room.room_id);
+      sessionStorage.setItem("active_gd_room_code", room.room_id);
       setGdStep("waiting");
       connectGDWebSocket(room.room_id);
     } catch (err: any) {
@@ -717,6 +855,7 @@ export default function Communication() {
 
       setActiveRoomData(room);
       setGdRoomCode(room.room_id);
+      sessionStorage.setItem("active_gd_room_code", room.room_id);
       setGdStep(room.status === "active" ? "live" : "waiting");
       connectGDWebSocket(room.room_id);
     } catch (err: any) {
@@ -742,6 +881,81 @@ export default function Communication() {
     }
   };
 
+  const handleStartGdSpeakingTurn = async () => {
+    if (!gdRoomCode || !activeRoomData) return;
+    setGdError(null);
+    try {
+      const updatedRoom = await apiRequest<GDRoomState>(`/api/communication/gd/rooms/${gdRoomCode}/speak/start`, {
+        method: "POST",
+      });
+      setActiveRoomData(updatedRoom);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      gdMediaStreamRef.current = stream;
+
+      const options: MediaRecorderOptions = {};
+      if (MediaRecorder.isTypeSupported("audio/webm")) {
+        options.mimeType = "audio/webm";
+      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+        options.mimeType = "audio/mp4";
+      }
+
+      const recorder = new MediaRecorder(stream, options);
+      gdMediaRecorderRef.current = recorder;
+      gdAudioChunksRef.current = [];
+      gdTurnStartTimeRef.current = Date.now();
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          gdAudioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.start();
+      setIsGdSpeaking(true);
+    } catch (err: any) {
+      console.error("Failed to start speaking turn:", err);
+      setGdError(err?.message || "Could not start speaking turn.");
+    }
+  };
+
+  const handleStopGdSpeakingTurn = async () => {
+    if (!gdRoomCode || !gdMediaRecorderRef.current) return;
+
+    if (gdMediaRecorderRef.current.state !== "inactive") {
+      gdMediaRecorderRef.current.stop();
+    }
+
+    const durationSecs = Math.max(1, Math.round((Date.now() - gdTurnStartTimeRef.current) / 1000));
+
+    if (gdMediaStreamRef.current) {
+      gdMediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      gdMediaStreamRef.current = null;
+    }
+
+    setIsGdSpeaking(false);
+
+    setTimeout(async () => {
+      try {
+        const mimeType = gdMediaRecorderRef.current?.mimeType || "audio/webm";
+        const blob = new Blob(gdAudioChunksRef.current, { type: mimeType });
+
+        const formData = new FormData();
+        formData.append("file", blob, `gd_turn_${Date.now()}.webm`);
+        formData.append("duration_seconds", durationSecs.toString());
+
+        const updatedRoom = await apiRequest<GDRoomState>(`/api/communication/gd/rooms/${gdRoomCode}/speak/stop`, {
+          method: "POST",
+          body: formData,
+        });
+        setActiveRoomData(updatedRoom);
+      } catch (err: any) {
+        console.error("Failed to stop speaking turn:", err);
+        setGdError(err?.message || "Failed to upload speaking segment.");
+      }
+    }, 200);
+  };
+
   const handleLeaveGd = async () => {
     if (gdRoomCode) {
       try {
@@ -756,6 +970,7 @@ export default function Communication() {
       wsRef.current.close();
       wsRef.current = null;
     }
+    sessionStorage.removeItem("active_gd_room_code");
     setActiveRoomData(null);
     setGdStep("lobby");
   };
@@ -770,6 +985,7 @@ export default function Communication() {
     } catch (err) {
       console.error("End GD error:", err);
     }
+    sessionStorage.removeItem("active_gd_room_code");
     setGdStep("feedback");
   };
 
@@ -781,6 +997,7 @@ export default function Communication() {
   };
 
   const formatTimer = (secs: number) => {
+
     const m = Math.floor(secs / 60);
     const s = secs % 60;
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
@@ -1099,23 +1316,53 @@ export default function Communication() {
 
                     {/* Microphone Error Alert */}
                     {micError && (
-                      <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center justify-between gap-2 max-w-lg mx-auto animate-fade-in">
-                        <div className="flex items-center gap-2 text-left">
-                          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
-                          <span>{micError}</span>
+                      <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold space-y-2 max-w-lg mx-auto animate-fade-in text-left">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-left">
+                            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                            <span>{micError}</span>
+                          </div>
+                          <button onClick={() => setMicError(null)} className="p-1 rounded hover:bg-rose-500/20 text-muted-foreground hover:text-foreground">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <button onClick={() => setMicError(null)} className="p-1 rounded hover:bg-rose-500/20 text-muted-foreground hover:text-foreground">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        {audioBlob && recordingMeta && (
+                          <div className="pt-1 flex justify-end">
+                            <button
+                              disabled={isAnalyzing}
+                              onClick={() => {
+                                setMicError(null);
+                                analyzeAudioRecording(
+                                  audioBlob,
+                                  speakingTimer || 10,
+                                  recordingMeta.mimeType,
+                                  recordingMeta.attemptId,
+                                  recordingMeta.sha256
+                                );
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold shadow transition-all flex items-center gap-1.5"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Retry Speech Analysis</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
 
-                    {/* Real Audio Playback Player */}
+                    {/* Real Audio Playback Player & Recording Diagnostics */}
                     {audioUrl && !isRecording && (
                       <div className="p-4 rounded-xl border border-purple-500/20 bg-secondary/30 text-left max-w-lg mx-auto space-y-2 animate-fade-in">
-                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider font-mono">
-                          Recorded Audio Playback
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider font-mono">
+                            Recorded Audio Playback
+                          </span>
+                          {recordingMeta && (
+                            <span className="text-[10px] font-mono text-muted-foreground">
+                              {recordingMeta.sizeKb} KB | {recordingMeta.mimeType} | Attempt #{recordingMeta.attemptId.slice(0, 6)}
+                            </span>
+                          )}
+                        </div>
                         <audio controls src={audioUrl} className="w-full h-9 rounded-lg outline-none" />
                       </div>
                     )}
@@ -1764,7 +2011,7 @@ export default function Communication() {
                     />
                     <button
                       onClick={handleCopyJoinLink}
-                      className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shrink-0 flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-all shrink-0 flex items-center gap-1 cursor-pointer"
                     >
                       {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
                       <span>{copiedLink ? "Copied" : "Copy Code"}</span>
@@ -1772,17 +2019,38 @@ export default function Communication() {
                   </div>
                 </div>
 
+                {/* Minimum Participants Status Badge */}
+                <div className="p-3 rounded-xl border flex items-center justify-between text-xs font-semibold">
+                  <span className="text-muted-foreground">Minimum Participants Status:</span>
+                  {activeRoomData.participants.length < 2 ? (
+                    <span className="px-2.5 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-mono text-[11px] font-bold flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Waiting for participants: {activeRoomData.participants.length}/2 minimum</span>
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-[11px] font-bold flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>Ready to start: {activeRoomData.participants.length} participants</span>
+                    </span>
+                  )}
+                </div>
+
                 {/* Host vs Participant Status */}
                 {activeRoomData.host_user_id === user?.id || activeRoomData.is_host ? (
                   <div className="space-y-3 pt-2">
                     <button
                       onClick={handleStartGd}
-                      className="w-full py-3 rounded-xl text-xs font-bold text-white pm-btn-gradient shadow-md flex items-center justify-center gap-2 hover:opacity-95 transition-all cursor-pointer"
+                      disabled={activeRoomData.participants.length < 2}
+                      className="w-full py-3 rounded-xl text-xs font-bold text-white pm-btn-gradient shadow-md flex items-center justify-center gap-2 hover:opacity-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <Play className="w-4 h-4 fill-white" />
                       <span>Start Discussion Now</span>
                     </button>
-                    <p className="text-[11px] text-center text-muted-foreground">You are the host. Click start when participants are ready.</p>
+                    {activeRoomData.participants.length < 2 && (
+                      <p className="text-[11px] text-center text-amber-600 dark:text-amber-400 font-medium">
+                        At least 2 participants are required to start the Group Discussion. Share the room code above!
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="p-4 rounded-xl border border-purple-500/20 bg-purple-500/5 text-center space-y-2 animate-pulse">
@@ -1795,7 +2063,7 @@ export default function Communication() {
                 <div className="pt-2">
                   <button
                     onClick={handleLeaveGd}
-                    className="w-full py-2 px-4 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                    className="w-full py-2 px-4 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   >
                     Leave Waiting Room
                   </button>
@@ -1849,7 +2117,7 @@ export default function Communication() {
               <div className="flex items-center justify-between border-b border-border pb-4 gap-4">
                 <div>
                   <span className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                    <Radio className="w-3.5 h-3.5 animate-pulse text-purple-500" /> Active Group Discussion
+                    <Radio className="w-3.5 h-3.5 animate-pulse text-purple-500" /> Active Placement Group Discussion (5 Mins)
                   </span>
                   <h3 className="text-base sm:text-lg font-bold text-foreground">{activeRoomData.topic}</h3>
                 </div>
@@ -1860,64 +2128,173 @@ export default function Communication() {
                 </div>
               </div>
 
-              {/* Participant Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {activeRoomData.participants.map((p) => {
-                  const isYou = p.user_id === user?.id;
-                  return (
-                    <div
-                      key={p.user_id}
-                      className={`p-4 rounded-xl border transition-all space-y-3 ${
-                        p.is_speaking
-                          ? "border-emerald-500 bg-emerald-500/10 shadow-sm ring-1 ring-emerald-500/50"
-                          : isYou
-                          ? "border-purple-500/40 bg-purple-500/10"
-                          : "border-border bg-secondary/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isYou ? "bg-purple-600 text-white" : "bg-secondary text-foreground border border-border"}`}>
-                            {p.display_name[0]?.toUpperCase() || "U"}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-foreground truncate max-w-[110px]">
-                              {p.display_name} {isYou && "(You)"}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">{p.is_host ? "Host" : "Participant"}</p>
-                          </div>
-                        </div>
+              {/* Current Speaker Banner */}
+              <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/10 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${activeRoomData.current_speaker_id ? "bg-emerald-500/20 text-emerald-500 animate-bounce" : "bg-secondary text-muted-foreground"}`}>
+                    <Volume2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                      Current Active Speaker
+                    </span>
+                    <p className="text-sm font-extrabold text-foreground">
+                      {activeRoomData.current_speaker_name ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                          <span>● {activeRoomData.current_speaker_name} is speaking</span>
+                          {activeRoomData.current_speaker_id === user?.id && <span className="text-purple-500">(You)</span>}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground font-normal">
+                          Nobody is speaking. Click "Your Turn — Start Speaking" below when ready!
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
 
-                        {p.is_speaking ? (
-                          <span className="p-1.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                            <Volume2 className="w-3.5 h-3.5 animate-bounce" />
-                          </span>
-                        ) : (
-                          <span className={`w-2 h-2 rounded-full ${p.is_connected ? "bg-emerald-500" : "bg-muted"}`} />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Speak Control Button for Current User */}
+                <div>
+                  {isGdSpeaking ? (
+                    <button
+                      onClick={handleStopGdSpeakingTurn}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-500 shadow-md flex items-center gap-2 animate-pulse cursor-pointer"
+                    >
+                      <MicOff className="w-4 h-4" />
+                      <span>Stop Speaking</span>
+                    </button>
+                  ) : activeRoomData.current_speaker_id && activeRoomData.current_speaker_id !== user?.id ? (
+                    <button
+                      disabled
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-secondary text-muted-foreground border border-border flex items-center gap-2 cursor-not-allowed opacity-60"
+                    >
+                      <Lock className="w-4 h-4" />
+                      <span>{activeRoomData.current_speaker_name || "Peer"} is speaking</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleStartGdSpeakingTurn}
+                      className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 shadow-md flex items-center gap-2 cursor-pointer transition-all"
+                    >
+                      <Mic className="w-4 h-4" />
+                      <span>Your Turn — Start Speaking</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Suggested Discussion Guidelines */}
-              <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-2 text-xs">
-                <p className="font-bold text-foreground flex items-center gap-1.5">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" /> Recommended Group Discussion Guidelines:
-                </p>
-                <ul className="list-disc pl-5 text-muted-foreground space-y-1 leading-relaxed">
-                  <li>Initiate with a clear structural overview or definition of the topic.</li>
-                  <li>Support claims with concrete industry examples, data points, or historical trends.</li>
-                  <li>Listen actively without interrupting and acknowledge peer contributions respectfully.</li>
-                </ul>
+              {/* AUTOMATIC TEAM SPLIT DISPLAY: TEAM A vs TEAM B */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* TEAM A CARD */}
+                <div className="p-4 rounded-2xl border border-purple-500/30 bg-card space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-border pb-2">
+                    <span className="text-xs font-extrabold text-purple-600 dark:text-purple-400 font-mono">
+                      TEAM A
+                    </span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {activeRoomData.participants.filter((p) => p.team === "Team A").length} Members
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {activeRoomData.participants
+                      .filter((p) => p.team === "Team A")
+                      .map((p) => {
+                        const isYou = p.user_id === user?.id;
+                        return (
+                          <div
+                            key={p.user_id}
+                            className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                              p.is_speaking
+                                ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
+                                : isYou
+                                ? "border-purple-500/30 bg-purple-500/5"
+                                : "border-border bg-secondary/30"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-purple-600/30 text-purple-700 dark:text-purple-300 font-bold font-mono text-xs flex items-center justify-center">
+                                {p.display_name[0]?.toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-bold text-foreground truncate max-w-[130px]">
+                                  {p.display_name} {isYou && "(You)"}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {p.turn_count || 0} turns • {Math.round(p.total_speaking_seconds || 0)}s spoke
+                                </p>
+                              </div>
+                            </div>
+
+                            {p.is_speaking && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 animate-pulse">
+                                Speaking
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* TEAM B CARD */}
+                <div className="p-4 rounded-2xl border border-teal-500/30 bg-card space-y-3 shadow-sm">
+                  <div className="flex items-center justify-between border-b border-border pb-2">
+                    <span className="text-xs font-extrabold text-teal-600 dark:text-teal-400 font-mono">
+                      TEAM B
+                    </span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {activeRoomData.participants.filter((p) => p.team === "Team B").length} Members
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {activeRoomData.participants
+                      .filter((p) => p.team === "Team B")
+                      .map((p) => {
+                        const isYou = p.user_id === user?.id;
+                        return (
+                          <div
+                            key={p.user_id}
+                            className={`p-3 rounded-xl border flex items-center justify-between text-xs transition-all ${
+                              p.is_speaking
+                                ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
+                                : isYou
+                                ? "border-teal-500/30 bg-teal-500/5"
+                                : "border-border bg-secondary/30"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-7 h-7 rounded-full bg-teal-600/30 text-teal-700 dark:text-teal-300 font-bold font-mono text-xs flex items-center justify-center">
+                                {p.display_name[0]?.toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-bold text-foreground truncate max-w-[130px]">
+                                  {p.display_name} {isYou && "(You)"}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {p.turn_count || 0} turns • {Math.round(p.total_speaking_seconds || 0)}s spoke
+                                </p>
+                              </div>
+                            </div>
+
+                            {p.is_speaking && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 animate-pulse">
+                                Speaking
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
               </div>
 
               {/* Action Buttons Footer */}
               <div className="flex items-center justify-between pt-4 border-t border-border gap-4">
                 <button
                   onClick={handleLeaveGd}
-                  className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                  className="px-4 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 >
                   Leave Session
                 </button>
@@ -1934,44 +2311,23 @@ export default function Communication() {
             </div>
           )}
 
-          {/* POST-GD FEEDBACK STEP */}
+          {/* POST-GD FEEDBACK STEP: FULL GD RESULTS & TEAM COMPARISON REPORT */}
           {gdStep === "feedback" && (
-            <div className="p-6 sm:p-8 rounded-2xl border border-purple-500/30 bg-card space-y-6 shadow-sm text-center animate-fade-in">
-              <Trophy className="w-10 h-10 text-amber-500 dark:text-amber-400 mx-auto animate-bounce" />
-              <div>
-                <h3 className="text-xl font-bold text-foreground">Group Discussion Concluded</h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Topic: {activeRoomData?.topic || selectedGdTopic.title}
+            <div className="p-6 sm:p-8 rounded-2xl border border-purple-500/30 bg-card space-y-6 shadow-sm animate-fade-in">
+              <div className="text-center space-y-2">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs font-bold">
+                  <Trophy className="w-4 h-4" />
+                  <span>Group Discussion Completed</span>
+                </div>
+                <h3 className="text-2xl font-extrabold text-foreground">{activeRoomData?.topic || selectedGdTopic.title}</h3>
+                <p className="text-xs text-muted-foreground font-mono">
+                  Duration: 5:00 • Participants: {activeRoomData?.participants?.length || 2} Users
                 </p>
               </div>
 
-              {/* Quick Metrics */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-lg mx-auto">
-                <div className="p-3 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-[10px] text-muted-foreground font-semibold">Total Duration</p>
-                  <p className="text-base font-mono font-bold text-purple-600 dark:text-purple-400">15:00</p>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-[10px] text-muted-foreground font-semibold">Participants</p>
-                  <p className="text-base font-mono font-bold text-teal-600 dark:text-teal-400">
-                    {activeRoomData?.participants?.length || 1} Users
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-[10px] text-muted-foreground font-semibold">Sync Status</p>
-                  <p className="text-base font-mono font-bold text-emerald-600 dark:text-emerald-400">Synced</p>
-                </div>
-                <div className="p-3 rounded-xl bg-secondary/50 border border-border">
-                  <p className="text-[10px] text-muted-foreground font-semibold">Room Code</p>
-                  <p className="text-base font-mono font-bold text-amber-600 dark:text-amber-400">
-                    {gdRoomCode || "GD-ROOM"}
-                  </p>
-                </div>
-              </div>
-
-              {/* AI Evaluation Button if not fetched yet */}
+              {/* AI Evaluation Trigger if not fetched */}
               {!gdEvaluationData && (
-                <div className="pt-2">
+                <div className="pt-2 text-center">
                   <button
                     onClick={handleFetchGdEvaluation}
                     disabled={isEvaluatingGd}
@@ -1980,84 +2336,142 @@ export default function Communication() {
                     {isEvaluatingGd ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Evaluating Participation & Signals...</span>
+                        <span>Transcribing & Evaluating Team Performance...</span>
                       </>
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4" />
-                        <span>Get AI Individual Evaluation</span>
+                        <span>Generate Full AI Placement GD Report</span>
                       </>
                     )}
                   </button>
                 </div>
               )}
 
-              {/* AI Scorecard Display */}
+              {/* FULL AI GD REPORT */}
               {gdEvaluationData && (
-                <div className="space-y-5 text-left pt-2 border-t border-border animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" /> AI Scorecard & Signals
-                    </span>
-                    {gdEvaluationData.overall_score !== null && (
-                      <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-                        Overall Score: {gdEvaluationData.overall_score}%
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Dimensions Breakdown Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    {Object.entries(gdEvaluationData.dimensions).map(([dimKey, dim]) => (
-                      <div key={dimKey} className="p-3.5 rounded-xl border border-border bg-secondary/30 space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-foreground capitalize">{dimKey.replace("_", " ")}</span>
-                          <span className="font-mono font-bold text-xs">
-                            {dim.score !== null ? (
-                              <span className="text-purple-600 dark:text-purple-400">{dim.score}%</span>
-                            ) : (
-                              <span className="text-muted-foreground text-[10px]">N/A (No Speech Stream)</span>
-                            )}
+                <div className="space-y-6 animate-fade-in">
+                  {/* WINNING TEAM BADGE BANNER */}
+                  {gdEvaluationData.winning_team && (
+                    <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <Award className="w-6 h-6 text-amber-500 shrink-0" />
+                        <div>
+                          <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300 uppercase">
+                            Winning Team
                           </span>
+                          <p className="text-base font-extrabold text-foreground">
+                            {gdEvaluationData.winning_team} Winner
+                          </p>
                         </div>
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">{dim.reason}</p>
                       </div>
-                    ))}
-                  </div>
+                      <p className="text-xs text-muted-foreground max-w-md text-right leading-relaxed font-medium">
+                        {gdEvaluationData.winning_rationale}
+                      </p>
+                    </div>
+                  )}
 
-                  {/* Strengths & Suggestions */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    {gdEvaluationData.strengths?.length > 0 && (
-                      <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-1">
-                        <p className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">Observed Strengths:</p>
-                        <ul className="list-disc pl-4 text-muted-foreground space-y-1">
-                          {gdEvaluationData.strengths.map((s, idx) => (
-                            <li key={idx}>{s}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                  {/* TEAM COMPARISON CARDS */}
+                  {gdEvaluationData.team_evaluations && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {Object.values(gdEvaluationData.team_evaluations).map((tEval) => (
+                        <div
+                          key={tEval.team_name}
+                          className="p-5 rounded-2xl border border-border bg-secondary/30 space-y-3"
+                        >
+                          <div className="flex items-center justify-between border-b border-border pb-2">
+                            <h4 className="text-sm font-extrabold text-foreground">{tEval.team_name}</h4>
+                            <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20">
+                              Team Score: {tEval.team_score}%
+                            </span>
+                          </div>
 
-                    {gdEvaluationData.suggestions?.length > 0 && (
-                      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 space-y-1">
-                        <p className="font-bold text-amber-600 dark:text-amber-400 font-mono text-[11px]">Actionable Recommendations:</p>
-                        <ul className="list-disc pl-4 text-muted-foreground space-y-1">
-                          {gdEvaluationData.suggestions.map((s, idx) => (
-                            <li key={idx}>{s}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
+                          <div className="text-xs space-y-1 text-muted-foreground">
+                            <p>
+                              <strong className="text-foreground">Members:</strong> {tEval.members.join(", ")}
+                            </p>
+                            <p>
+                              <strong className="text-foreground">Speaking Contribution:</strong>{" "}
+                              {Math.round(tEval.total_speaking_seconds)}s across {tEval.total_turns} turn(s)
+                            </p>
+                          </div>
 
-                  {/* Data Limitation Banner */}
-                  {gdEvaluationData.data_limitations?.length > 0 && (
-                    <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/10 text-xs text-muted-foreground flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0 text-purple-600 dark:text-purple-400 mt-0.5" />
-                      <div className="space-y-0.5">
-                        <p className="font-bold text-purple-700 dark:text-purple-300">Data Limitation Notice</p>
-                        {gdEvaluationData.data_limitations.map((lim, idx) => (
-                          <p key={idx} className="leading-relaxed">{lim}</p>
+                          {tEval.strengths?.length > 0 && (
+                            <div className="space-y-1 text-xs">
+                              <p className="font-bold text-emerald-600 dark:text-emerald-400 font-mono text-[11px]">
+                                Team Strengths:
+                              </p>
+                              <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
+                                {tEval.strengths.map((st, i) => (
+                                  <li key={i}>{st}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* INDIVIDUAL PERFORMANCE GRID */}
+                  {gdEvaluationData.participant_evaluations && (
+                    <div className="space-y-4 pt-2">
+                      <h4 className="text-sm font-bold text-foreground flex items-center gap-2 border-b border-border pb-2">
+                        <Users className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                        <span>Individual Participant Performance Breakdown</span>
+                      </h4>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {gdEvaluationData.participant_evaluations.map((pe) => (
+                          <div
+                            key={pe.user_id}
+                            className="p-5 rounded-2xl border border-border bg-card space-y-3 shadow-sm"
+                          >
+                            <div className="flex items-center justify-between border-b border-border pb-2">
+                              <div>
+                                <p className="font-bold text-foreground text-sm flex items-center gap-1.5">
+                                  <span>{pe.display_name}</span>
+                                  {pe.user_id === user?.id && <span className="text-xs text-purple-500">(You)</span>}
+                                </p>
+                                <span className="text-[10px] font-mono text-muted-foreground">
+                                  {pe.team} • {pe.turn_count} turn(s) • {Math.round(pe.speaking_seconds)}s spoken
+                                </span>
+                              </div>
+                              <span className="text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded bg-emerald-500/10 border border-emerald-500/20">
+                                {pe.overall_score}%
+                              </span>
+                            </div>
+
+                            {/* Transcript snippet */}
+                            <div className="p-3 rounded-xl bg-secondary/50 border border-border text-xs space-y-1">
+                              <p className="font-mono text-[10px] font-bold text-muted-foreground">Transcribed Audio:</p>
+                              <p className="text-foreground italic leading-relaxed">"{pe.transcript}"</p>
+                            </div>
+
+                            {/* Strengths & Improvements */}
+                            <div className="space-y-2 text-xs">
+                              {pe.strengths?.length > 0 && (
+                                <div>
+                                  <p className="font-bold text-emerald-600 dark:text-emerald-400 text-[11px]">Strengths:</p>
+                                  <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
+                                    {pe.strengths.map((s, idx) => (
+                                      <li key={idx}>{s}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {pe.improvements?.length > 0 && (
+                                <div>
+                                  <p className="font-bold text-amber-600 dark:text-amber-400 text-[11px]">Areas to Improve:</p>
+                                  <ul className="list-disc pl-4 text-muted-foreground space-y-0.5">
+                                    {pe.improvements.map((imp, idx) => (
+                                      <li key={idx}>{imp}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -2065,20 +2479,22 @@ export default function Communication() {
                 </div>
               )}
 
-              <button
-                onClick={() => {
-                  setGdStep("lobby");
-                  setActiveRoomData(null);
-                  setGdEvaluationData(null);
-                }}
-                className="py-2.5 px-6 rounded-xl text-xs font-bold text-white pm-btn-gradient shadow-md"
-              >
-                Return to GD Lobby
-              </button>
+              <div className="pt-4 text-center">
+                <button
+                  onClick={() => {
+                    setGdStep("lobby");
+                    setActiveRoomData(null);
+                    setGdEvaluationData(null);
+                  }}
+                  className="py-2.5 px-6 rounded-xl text-xs font-bold text-white pm-btn-gradient shadow-md cursor-pointer"
+                >
+                  Return to GD Lobby
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
     </div>
   );
-}
+}

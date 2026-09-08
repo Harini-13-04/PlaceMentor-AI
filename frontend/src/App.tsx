@@ -98,6 +98,26 @@ const App = () => (
                 }
               />
               <Route
+                path="/aptitude/concept/:conceptId"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Aptitude />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/aptitude/:conceptId"
+                element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Aptitude />
+                    </Layout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
                 path="/communication"
                 element={
                   <ProtectedRoute>

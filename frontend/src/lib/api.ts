@@ -29,10 +29,27 @@ export async function apiRequest<T = unknown>(
   const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const fullUrl = `${API_URL}${normalizedEndpoint}`;
 
-  const response = await fetch(fullUrl, {
-    ...restOptions,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(fullUrl, {
+      ...restOptions,
+      headers,
+    });
+  } catch (netErr: any) {
+    if (
+      netErr?.name === "TypeError" ||
+      netErr?.message?.includes("Failed to fetch") ||
+      netErr?.message?.includes("fetch") ||
+      netErr?.message?.includes("NetworkError")
+    ) {
+      const error = new Error(
+        "Unable to connect to the server. Please make sure the backend is running."
+      ) as Error & { status?: number };
+      error.status = 0;
+      throw error;
+    }
+    throw netErr;
+  }
 
   if (!response.ok) {
     if (response.status === 401) {

@@ -27,6 +27,7 @@ class EducationItem(BaseModel):
     end_date: str = ""
     current: bool = False
     gpa: str = ""
+    grade: str = ""
     description: str = ""
 
 
@@ -236,6 +237,8 @@ class ATSAnalysisResponse(BaseModel):
 
 class JobMatchRequest(BaseModel):
     job_description: str = Field(..., description="Job description text to evaluate against resume")
+    job_title: Optional[str] = Field(None, description="Optional job title")
+    company_name: Optional[str] = Field(None, description="Optional company name")
 
 
 class JobMatchCategories(BaseModel):
@@ -257,12 +260,19 @@ class JobMatchRecommendation(BaseModel):
 
 class JobMatchResponse(BaseModel):
     resume_id: str
+    resume_name: Optional[str] = None
+    job_title: Optional[str] = None
+    company_name: Optional[str] = None
     overall_match_score: int = Field(..., ge=0, le=100)
     categories: JobMatchCategories
     matched_skills: List[str] = Field(default_factory=list)
     missing_skills: List[str] = Field(default_factory=list)
     matched_keywords: List[str] = Field(default_factory=list)
     missing_keywords: List[str] = Field(default_factory=list)
+    experience_alignment_note: Optional[str] = None
+    project_relevance_note: Optional[str] = None
+    education_certification_note: Optional[str] = None
+    relevant_projects: List[str] = Field(default_factory=list)
     strengths: List[str] = Field(default_factory=list)
     gaps: List[str] = Field(default_factory=list)
     recommendations: List[JobMatchRecommendation] = Field(default_factory=list)

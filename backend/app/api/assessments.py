@@ -7,6 +7,8 @@ from app.services.assessment_service import (
     submit_assessment_attempt,
     get_topic_study_guide,
     get_user_assessment_history,
+    mark_concept_learned,
+    get_user_aptitude_progress,
 )
 
 router = APIRouter(prefix="/assessments", tags=["Assessments"])
@@ -19,6 +21,11 @@ class AssessmentSubmitRequest(BaseModel):
     difficulty: str = "Mixed"
     answers: Dict[str, int]  # {question_id: selected_index}
     time_spent_seconds: int = 0
+
+
+class ConceptLearnRequest(BaseModel):
+    concept: str
+    category: str = "Quantitative Aptitude"
 
 
 @router.get("/questions")
@@ -94,3 +101,29 @@ async def get_history(
     user_id = current_user["id"]
     history = await get_user_assessment_history(user_id=user_id, assessment_type=assessment_type)
     return {"attempts": history, "total": len(history)}
+
+
+@router.get("/progress")
+async def get_progress(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Retrieve authenticated user's real aptitude concept learning and practice progress.
+    """
+    user_id = current_user["id"]
+    progress = await get_user_aptitude_progress(user_id=user_id)
+    return progress
+
+
+@router.post("/learn")
+async def learn_concept(
+    request: ConceptLearnRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Mark a concept as learned for the authenticated user.
+    """
+    user_id = current_user["id"]
+    res = await mark_concept_learned(user_id=user_id, concept_name=request.concept, category=request.category)
+    return res
+

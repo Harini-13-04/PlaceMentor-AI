@@ -232,7 +232,12 @@ async def match_job_description(
             detail="Job description exceeds maximum allowable length of 20,000 characters",
         )
 
-    return analyze_job_match(resume, request.job_description)
+    return analyze_job_match(
+        resume,
+        request.job_description,
+        job_title=request.job_title,
+        company_name=request.company_name,
+    )
 
 
 @router.post("/{resume_id}/defend/init", response_model=DefendInitResponse)

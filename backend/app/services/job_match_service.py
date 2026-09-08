@@ -165,7 +165,12 @@ def extract_resume_full_text(resume: ResumeData) -> str:
     return " ".join(parts)
 
 
-def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchResponse:
+def analyze_job_match(
+    resume: ResumeData,
+    job_description: str,
+    job_title: str | None = None,
+    company_name: str | None = None,
+) -> JobMatchResponse:
     """
     Deterministic Job Description Matching Engine (0-100 score).
     Weighted Categories:
@@ -248,18 +253,29 @@ def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchRespo
 
     exp_score = max(0, min(20, exp_score))
 
+    if matching_role_term:
+        experience_alignment_note = f"Your target role '{resume.target_role}' and experience demonstrate alignment with the position."
+    elif resume.experience and len(resume.experience) > 0:
+        experience_alignment_note = f"Your experience demonstrates technical contributions, though explicit alignment for '{job_title or 'this role'}' can be highlighted further."
+    else:
+        experience_alignment_note = "Your resume has limited evidence of explicit work experience alignment for this role."
+
     # ------------------------------------------------------------------------
     # 4. PROJECT / DOMAIN ALIGNMENT (0-10 points)
     # ------------------------------------------------------------------------
     project_score = 4
+    relevant_projects: List[str] = []
+
     if resume.projects and len(resume.projects) > 0:
         project_skills_count = 0
         for proj in resume.projects:
             proj_text = f"{proj.name} {proj.description} {' '.join(proj.technologies)} {' '.join(proj.bullets)}"
             proj_detected = extract_skills_from_text(proj_text)
-            if proj_detected.intersection(jd_skills):
+            if proj_detected.intersection(jd_skills) or any(kw in normalize_text(proj_text) for kw in jd_keywords if len(kw) > 4):
                 project_skills_count += 1
-        
+                if proj.name:
+                    relevant_projects.append(proj.name)
+
         if project_skills_count > 0:
             project_score += 6
         else:
@@ -268,6 +284,13 @@ def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchRespo
         project_score += 4
 
     project_score = max(0, min(10, project_score))
+
+    if relevant_projects:
+        project_relevance_note = f"Relevant projects found in resume: {', '.join(relevant_projects[:3])}."
+    elif resume.projects and len(resume.projects) > 0:
+        project_relevance_note = "Projects are present in your resume, but tech stack alignment with this specific job description is partial."
+    else:
+        project_relevance_note = "No specific projects matching the target job tech stack were found in your resume."
 
     # ------------------------------------------------------------------------
     # 5. EDUCATION / CERTIFICATION ALIGNMENT (0-10 points)
@@ -288,6 +311,20 @@ def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchRespo
             edu_score += 1
 
     edu_score = max(0, min(10, edu_score))
+
+    if resume.education and len(resume.education) > 0:
+        if jd_requires_degree:
+            education_certification_note = "Bachelor's degree or educational requirement is supported by your resume."
+        else:
+            education_certification_note = "Education history is included in your resume."
+    else:
+        education_certification_note = "Education details were not found in the resume."
+
+    if jd_requires_cert:
+        if resume.certifications and len(resume.certifications) > 0:
+            education_certification_note += " Relevant certifications are present."
+        else:
+            education_certification_note += " Relevant certification was not found in the resume."
 
     # ------------------------------------------------------------------------
     # OVERALL MATCH SCORE & STRENGTHS / GAPS / RECOMMENDATIONS
@@ -315,7 +352,7 @@ def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchRespo
         recommendations.append(JobMatchRecommendation(
             id="rec-match-skl-01",
             title="Address Potential Skill Gaps",
-            description=f"Potential skill gap — only address this if you genuinely have this experience: {', '.join(missing_skills[:3])}.",
+            description=f"Skill not found in resume: {', '.join(missing_skills[:3])}. Add only if you genuinely have this experience.",
             severity="high" if len(missing_skills) >= 3 else "medium",
             section="skills",
             action="Fix in Resume"
@@ -325,7 +362,7 @@ def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchRespo
         recommendations.append(JobMatchRecommendation(
             id="rec-match-kw-01",
             title="Consider Relevant Industry Terminology",
-            description=f"Potential keyword to consider — only add it if you genuinely have this skill/experience: {', '.join(missing_keywords[:4])}.",
+            description=f"Keyword not found in resume: {', '.join(missing_keywords[:4])}. Add only if you genuinely have this skill or experience.",
             severity="medium",
             section="summary",
             action="Fix in Resume"
@@ -336,7 +373,7 @@ def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchRespo
         recommendations.append(JobMatchRecommendation(
             id="rec-match-role-01",
             title="Refine Summary Role Phrasing",
-            description="Not demonstrated in the current resume. Consider updating your summary intro to highlight alignment with the target role phrasing where applicable.",
+            description="Not demonstrated in the current resume. Consider updating your summary intro to highlight alignment with target role phrasing where applicable.",
             severity="medium",
             section="summary",
             action="Fix in Resume"
@@ -363,12 +400,19 @@ def analyze_job_match(resume: ResumeData, job_description: str) -> JobMatchRespo
 
     return JobMatchResponse(
         resume_id=resume.id,
+        resume_name=resume.name,
+        job_title=job_title,
+        company_name=company_name,
         overall_match_score=overall_score,
         categories=categories,
         matched_skills=matched_skills,
         missing_skills=missing_skills,
         matched_keywords=matched_keywords,
         missing_keywords=missing_keywords,
+        experience_alignment_note=experience_alignment_note,
+        project_relevance_note=project_relevance_note,
+        education_certification_note=education_certification_note,
+        relevant_projects=relevant_projects,
         strengths=strengths,
         gaps=gaps,
         recommendations=recommendations,
