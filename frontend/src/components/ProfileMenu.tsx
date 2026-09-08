@@ -7,11 +7,19 @@ import {
   ChevronDown,
 } from "lucide-react";
 
+
+import { getMediaUrl } from "@/pages/Profile";
+
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatar]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -97,9 +105,10 @@ export default function ProfileMenu() {
           >
             {user?.avatar ? (
               <img
-                src={user.avatar}
+                src={resolvedAvatar}
                 alt="Profile"
-                className="w-8 h-8 rounded-full border border-purple-500/40 object-cover shrink-0"
+                onError={() => setAvatarError(true)}
+                className="w-9 h-9 rounded-full border border-purple-500/40 object-cover"
               />
             ) : (
               <div className="w-8 h-8 rounded-full border border-purple-500/40 bg-purple-500/10 flex items-center justify-center font-bold text-sm text-purple-600 dark:text-purple-400 shrink-0">

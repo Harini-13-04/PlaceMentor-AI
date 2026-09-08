@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { API_URL, getAuthHeaders } from "@/config";
+import { API_URL, getAuthHeaders, getAuthToken } from "@/config";
 import {
   User as UserIcon,
   Mail,
@@ -36,6 +36,27 @@ import {
   Zap,
 } from "lucide-react";
 
+/**
+ * Resolves media URLs (avatars/banners) to properly point to FastAPI static uploads
+ * or external URLs / base64 data URLs.
+ */
+export function getMediaUrl(url?: string): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:")
+  ) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("/")) {
+    return API_URL ? `${API_URL}${trimmed}` : trimmed;
+  }
+  return API_URL ? `${API_URL}/${trimmed}` : `/${trimmed}`;
+}
+
 export default function Profile() {
   const { user, updateUser } = useAuth();
 
@@ -50,6 +71,10 @@ export default function Profile() {
   const [brainProgress, setBrainProgress] = useState<any>(null);
   const [problemStats, setProblemStats] = useState<any>(null);
   const [loadingStats, setLoadingStats] = useState(true);
+
+  // Image load error fallbacks
+  const [avatarError, setAvatarError] = useState(false);
+  const [bannerError, setBannerError] = useState(false);
 
   // Profile Save state machine
   const [isSaving, setIsSaving] = useState(false);
@@ -127,6 +152,8 @@ export default function Profile() {
       });
       setSkills(Array.isArray(user.skills) ? user.skills : []);
       setLanguages(Array.isArray(user.preferred_languages) ? user.preferred_languages : []);
+      setAvatarError(false);
+      setBannerError(false);
     }
   }, [user]);
 
@@ -272,7 +299,6 @@ export default function Profile() {
 
       const updatedUserFromBackend = await res.json();
 
-      // Update AuthContext so changes immediately reflect across entire app
       updateUser({
         name: updatedUserFromBackend.name || updatedUserFromBackend.full_name || formData.name,
         full_name: updatedUserFromBackend.full_name || formData.name,
@@ -399,7 +425,7 @@ export default function Profile() {
       const formDataUpload = new FormData();
       formDataUpload.append("avatar_file", file);
 
-      const token = localStorage.getItem("pm_token") || localStorage.getItem("placementor_token");
+      const token = getAuthToken();
       const res = await fetch(`${API_URL}/api/users/me/avatar`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -413,6 +439,7 @@ export default function Profile() {
 
       const updatedUser = await res.json();
       updateUser({ avatar: updatedUser.avatar });
+      setAvatarError(false);
       setIsAvatarModalOpen(false);
     } catch (err: any) {
       setMediaError(err.message || "Failed to upload avatar image.");
@@ -440,6 +467,7 @@ export default function Profile() {
 
       const updatedUser = await res.json();
       updateUser({ avatar: updatedUser.avatar });
+      setAvatarError(false);
       setAvatarUrlInput("");
       setIsAvatarModalOpen(false);
     } catch (err: any) {
@@ -460,6 +488,7 @@ export default function Profile() {
       if (res.ok) {
         const updatedUser = await res.json();
         updateUser({ avatar: updatedUser.avatar || "" });
+        setAvatarError(false);
         setIsAvatarModalOpen(false);
       }
     } catch (err) {
@@ -481,7 +510,7 @@ export default function Profile() {
       const formDataUpload = new FormData();
       formDataUpload.append("banner_file", file);
 
-      const token = localStorage.getItem("pm_token") || localStorage.getItem("placementor_token");
+      const token = getAuthToken();
       const res = await fetch(`${API_URL}/api/users/me/banner`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -495,6 +524,7 @@ export default function Profile() {
 
       const updatedUser = await res.json();
       updateUser({ banner_image: updatedUser.banner_image });
+      setBannerError(false);
       setIsBannerModalOpen(false);
     } catch (err: any) {
       setMediaError(err.message || "Failed to upload banner image.");
@@ -522,6 +552,7 @@ export default function Profile() {
 
       const updatedUser = await res.json();
       updateUser({ banner_image: updatedUser.banner_image });
+      setBannerError(false);
       setBannerUrlInput("");
       setIsBannerModalOpen(false);
     } catch (err: any) {
@@ -542,6 +573,7 @@ export default function Profile() {
       if (res.ok) {
         const updatedUser = await res.json();
         updateUser({ banner_image: updatedUser.banner_image || "" });
+        setBannerError(false);
         setIsBannerModalOpen(false);
       }
     } catch (err) {
@@ -561,10 +593,14 @@ export default function Profile() {
   const displayName = formData.name || user?.name || user?.full_name || "Student Candidate";
   const initials = displayName
     .split(" ")
+    .filter(Boolean)
     .map((w) => w[0])
     .join("")
     .slice(0, 2)
     .toUpperCase() || "PM";
+
+  const resolvedAvatarUrl = user?.avatar ? getMediaUrl(user.avatar) : "";
+  const resolvedBannerUrl = user?.banner_image ? getMediaUrl(user.banner_image) : "";
 
   return (
     <div className="space-y-6 font-sans text-foreground">
@@ -590,18 +626,28 @@ export default function Profile() {
       <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
         {/* Cover / Banner Section */}
         <div
-          className="relative h-36 sm:h-48 w-full bg-gradient-to-r from-purple-900/40 via-indigo-900/30 to-background border-b border-border flex items-end justify-end p-4 bg-cover bg-center"
+          className="relative h-36 sm:h-48 w-full bg-gradient-to-r from-purple-900/40 via-indigo-900/30 to-background border-b border-border flex items-end justify-end p-4 bg-cover bg-center transition-all duration-300"
           style={
-            user?.banner_image
+            resolvedBannerUrl && !bannerError
               ? {
-                  backgroundImage: `url(${user.banner_image.startsWith("/") ? `${API_URL}${user.banner_image}` : user.banner_image})`,
+                  backgroundImage: `url("${resolvedBannerUrl}")`,
                 }
               : undefined
           }
         >
+          {resolvedBannerUrl && (
+            <img
+              src={resolvedBannerUrl}
+              alt="Cover preview"
+              className="hidden"
+              onError={() => setBannerError(true)}
+              onLoad={() => setBannerError(false)}
+            />
+          )}
+
           <button
             onClick={() => setIsBannerModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-background/80 hover:bg-background backdrop-blur-md border border-border text-foreground text-[11px] font-semibold transition-all shadow-md"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-background/80 hover:bg-background backdrop-blur-md border border-border text-foreground text-[11px] font-semibold transition-all shadow-md cursor-pointer"
           >
             <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
             <span>{user?.banner_image ? "Change Cover" : "Add Cover Banner"}</span>
@@ -609,71 +655,79 @@ export default function Profile() {
         </div>
 
         {/* Profile Details Bar */}
-        <div className="p-6 sm:p-8 space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 -mt-14 sm:-mt-16">
-            <div className="flex items-end sm:items-center gap-4">
-              {/* Interactive Avatar Container */}
-              <div className="relative group shrink-0">
-                {user?.avatar ? (
+        <div className="px-6 pb-6 sm:px-8 sm:pb-8 pt-0 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5">
+              {/* Left: Avatar overlapping banner */}
+              <div className="relative group shrink-0 -mt-14 sm:-mt-16 z-10 self-start sm:self-auto">
+                {resolvedAvatarUrl && !avatarError ? (
                   <img
-                    src={user.avatar.startsWith("/") ? `${API_URL}${user.avatar}` : user.avatar}
+                    src={resolvedAvatarUrl}
                     alt={displayName}
-                    className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-card object-cover shadow-lg bg-card"
+                    onError={() => setAvatarError(true)}
+                    onLoad={() => setAvatarError(false)}
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 border-card object-cover shadow-xl bg-card"
                   />
                 ) : (
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-4 border-card bg-purple-500/10 flex items-center justify-center font-bold text-2xl sm:text-3xl text-purple-600 dark:text-purple-400 font-display shadow-lg">
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 border-card bg-purple-500/10 flex items-center justify-center font-bold text-2xl sm:text-3xl text-purple-600 dark:text-purple-400 font-display shadow-xl">
                     {initials}
                   </div>
                 )}
                 <button
                   onClick={() => setIsAvatarModalOpen(true)}
-                  className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200"
+                  className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200 cursor-pointer z-20"
                   title="Update profile photo"
                 >
                   <Camera className="w-6 h-6" />
                 </button>
               </div>
 
-              <div className="space-y-1 pt-4 sm:pt-0">
+              {/* User Identity Details - Left-aligned next to Profile Photo */}
+              <div className="space-y-1.5 text-left">
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{displayName}</h1>
                   {formData.gender && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium">
+                    <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium">
                       {formData.gender}
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground font-medium">
+
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">
                   {formData.target_role ? formData.target_role : "Target Role: Not set"}
                   {formData.target_company ? ` • ${formData.target_company}` : ""}
                 </p>
-                <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground pt-1">
-                  <span className="flex items-center gap-1 font-mono text-purple-400 font-semibold">
+
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs text-muted-foreground pt-0.5">
+                  <span className="flex items-center gap-1 font-mono text-purple-400 font-semibold px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
                     <Sparkles className="w-3.5 h-3.5" /> Level {userLevel}
                   </span>
-                  <span>&bull;</span>
-                  <span className="font-mono text-foreground">{userXp} XP</span>
-                  <span>&bull;</span>
-                  <span className="font-mono text-emerald-400">{solvedCount} Solved</span>
-                  <span>&bull;</span>
-                  <span className="font-mono text-indigo-400">{attemptedCount} Attempts</span>
+                  <span className="font-mono text-foreground px-2 py-0.5 rounded-lg bg-secondary border border-border">
+                    {userXp} XP
+                  </span>
+                  <span className="font-mono text-emerald-400 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    {solvedCount} Solved
+                  </span>
+                  <span className="font-mono text-indigo-400 px-2 py-0.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                    {attemptedCount} Attempts
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Profile Action Buttons */}
-            <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-auto justify-end">
+            {/* Right: Profile Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
               <button
                 onClick={() => setIsPasswordModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-secondary/70 hover:bg-secondary text-xs font-semibold text-foreground transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-secondary/70 hover:bg-secondary text-xs font-semibold text-foreground transition-colors shadow-sm cursor-pointer"
                 title="Manage Account Password"
               >
                 <Key className="w-3.5 h-3.5 text-amber-400" />
-                <span className="hidden sm:inline">Password</span>
+                <span>Password</span>
               </button>
               <button
                 onClick={() => setIsEditing(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition-all shadow-sm"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition-all shadow-sm cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>Edit Profile</span>
@@ -681,18 +735,18 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Biography with Honest Empty State */}
-          <div className="pt-2 border-t border-border">
+          {/* Biography with Honest Empty State - Centered */}
+          <div className="pt-3 border-t border-border text-center">
             {formData.bio ? (
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed max-w-2xl mx-auto">
                 {formData.bio}
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground/70 italic flex items-center gap-1.5">
+              <p className="text-xs text-muted-foreground/70 italic flex items-center justify-center gap-1.5">
                 <span>Add a short bio to describe your placement goals and engineering interests.</span>
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="text-purple-400 underline hover:text-purple-300 not-italic font-medium"
+                  className="text-purple-400 underline hover:text-purple-300 not-italic font-medium cursor-pointer"
                 >
                   Edit bio
                 </button>
@@ -700,24 +754,24 @@ export default function Profile() {
             )}
           </div>
 
-          {/* Key Identity Attributes Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Mail className="w-4 h-4 text-purple-400 shrink-0" />
-              <span className="truncate">{formData.email || "No email"}</span>
+          {/* Key Identity Attributes Grid - Centered Wrap */}
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-2 text-xs text-muted-foreground border-t border-border/50">
+            <div className="flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span>{formData.email || "No email"}</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <GraduationCap className="w-4 h-4 text-purple-400 shrink-0" />
-              <span className="truncate">
+            <div className="flex items-center gap-1.5">
+              <GraduationCap className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span>
                 {formData.department ? formData.department : "Department: Not added"}
                 {formData.year ? ` (${formData.year})` : ""}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Briefcase className="w-4 h-4 text-purple-400 shrink-0" />
-              <span className="truncate">{formData.college || "College: Not added"}</span>
+            <div className="flex items-center gap-1.5">
+              <Briefcase className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span>{formData.college || "College: Not added"}</span>
             </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3">
               {formData.github ? (
                 <a
                   href={formData.github.startsWith("http") ? formData.github : `https://${formData.github}`}
@@ -725,11 +779,11 @@ export default function Profile() {
                   rel="noreferrer"
                   className="hover:text-purple-400 flex items-center gap-1 transition-colors"
                 >
-                  <Github className="w-4 h-4 text-purple-400" /> GitHub
+                  <Github className="w-3.5 h-3.5 text-purple-400" /> GitHub
                 </a>
               ) : (
                 <span className="flex items-center gap-1 opacity-40">
-                  <Github className="w-4 h-4" /> Not linked
+                  <Github className="w-3.5 h-3.5" /> Not linked
                 </span>
               )}
               {formData.linkedin ? (
@@ -739,11 +793,11 @@ export default function Profile() {
                   rel="noreferrer"
                   className="hover:text-purple-400 flex items-center gap-1 transition-colors"
                 >
-                  <Linkedin className="w-4 h-4 text-purple-400" /> LinkedIn
+                  <Linkedin className="w-3.5 h-3.5 text-purple-400" /> LinkedIn
                 </a>
               ) : (
                 <span className="flex items-center gap-1 opacity-40">
-                  <Linkedin className="w-4 h-4" /> Not linked
+                  <Linkedin className="w-3.5 h-3.5" /> Not linked
                 </span>
               )}
             </div>
@@ -752,11 +806,11 @@ export default function Profile() {
       </div>
 
       {/* =========================================================================
-          SECTION 2: SKILLS, LEARNING MATRIX & SCREENING STATUS
+          SECTION 2: SKILLS, LANGUAGES, COMPETENCY MATRIX & SCREENING STATUS
          ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Technical Skills, Languages & Learning Levels */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* Left Column: Technical Skills & Programming Languages */}
+        <div className="lg:col-span-7 space-y-6">
           {/* Card 1: Verified Technical Skills */}
           <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
             <div className="flex items-center justify-between">
@@ -779,7 +833,7 @@ export default function Profile() {
                     {skill}
                     <button
                       onClick={() => removeSkill(skill)}
-                      className="text-muted-foreground hover:text-rose-400 transition-colors"
+                      className="text-muted-foreground hover:text-rose-400 transition-colors cursor-pointer"
                       title="Remove skill"
                     >
                       <X className="w-3 h-3" />
@@ -805,7 +859,7 @@ export default function Profile() {
               />
               <button
                 onClick={addSkill}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1 transition-all shrink-0 shadow-sm"
+                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1 transition-all shrink-0 shadow-sm cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Skill
               </button>
@@ -834,7 +888,7 @@ export default function Profile() {
                     {lang}
                     <button
                       onClick={() => removeLanguage(lang)}
-                      className="text-muted-foreground hover:text-rose-400 transition-colors"
+                      className="text-muted-foreground hover:text-rose-400 transition-colors cursor-pointer"
                       title="Remove language"
                     >
                       <X className="w-3 h-3" />
@@ -860,14 +914,44 @@ export default function Profile() {
               />
               <button
                 onClick={addLanguage}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 transition-all shrink-0 shadow-sm"
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 transition-all shrink-0 shadow-sm cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Language
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Card 3: Learning Matrix Levels */}
+        {/* Right Column: Screening Status & Learning Competency Matrix */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Placement Screening Status */}
+          <div className="p-5 rounded-2xl border border-border bg-card space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-foreground">Placement Screening Status</h3>
+              <Zap className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="p-4 rounded-xl bg-secondary/40 border border-border text-center space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Overall Readiness Index</p>
+              <p className="text-3xl font-extrabold font-mono text-purple-400">
+                {readinessScore !== null ? `${readinessScore}%` : "0%"}
+              </p>
+              <p
+                className={`text-xs font-semibold ${
+                  hasReadiness && readinessScore !== null && readinessScore >= 75
+                    ? "text-emerald-400"
+                    : "text-amber-400"
+                }`}
+              >
+                {hasReadiness
+                  ? readinessScore !== null && readinessScore >= 75
+                    ? "Tier-1 Qualified"
+                    : "In Progress"
+                  : "Baseline Needed"}
+              </p>
+            </div>
+          </div>
+
+          {/* Learning Matrix Levels */}
           <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -876,13 +960,13 @@ export default function Profile() {
               </div>
               <button
                 onClick={() => setIsEditing(true)}
-                className="text-xs text-purple-400 hover:underline font-medium"
+                className="text-xs text-purple-400 hover:underline font-medium cursor-pointer"
               >
                 Configure
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-secondary/40 border border-border space-y-1">
                 <span className="text-[11px] text-muted-foreground font-medium">Programming</span>
                 <p className="font-bold text-foreground capitalize">
@@ -910,100 +994,107 @@ export default function Profile() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Right Column: Placement Readiness & Career Profile */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Placement Screening Index */}
-          <div className="p-5 rounded-2xl border border-border bg-card space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground">Placement Screening Status</h3>
-              <Zap className="w-4 h-4 text-amber-400" />
-            </div>
-            <div className="p-4 rounded-xl bg-secondary/40 border border-border text-center space-y-1">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Overall Readiness Index</p>
-              <p className="text-3xl font-extrabold font-mono text-purple-400">
-                {readinessScore !== null ? `${readinessScore}%` : "0%"}
-              </p>
-              <p
-                className={`text-xs font-semibold ${
-                  hasReadiness && readinessScore !== null && readinessScore >= 75
-                    ? "text-emerald-400"
-                    : "text-amber-400"
-                }`}
-              >
-                {hasReadiness
-                  ? readinessScore !== null && readinessScore >= 75
-                    ? "Tier-1 Qualified"
-                    : "In Progress"
-                  : "Baseline Needed"}
-              </p>
-            </div>
+      {/* =========================================================================
+          SECTION 3: PERSONAL & CAREER PROFILE (FULL WIDTH AT BOTTOM)
+         ========================================================================= */}
+      <div className="p-6 rounded-2xl border border-border bg-card space-y-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <UserIcon className="w-4 h-4 text-purple-400" />
+            <h3 className="text-sm font-bold text-foreground">Personal & Career Profile</h3>
+          </div>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-xs text-purple-400 hover:underline font-medium cursor-pointer flex items-center gap-1"
+          >
+            <Edit3 className="w-3.5 h-3.5" /> Edit Details
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <UserIcon className="w-3.5 h-3.5 text-purple-400" /> Gender
+            </span>
+            <p className="font-semibold text-foreground capitalize">
+              {formData.gender || "Prefer not to say"}
+            </p>
           </div>
 
-          {/* Academic & Career Profile Summary */}
-          <div className="p-5 rounded-2xl border border-border bg-card space-y-3 text-xs">
-            <h3 className="text-sm font-bold text-foreground">Personal & Career Profile</h3>
-            <div className="space-y-2.5 divide-y divide-border">
-              <div className="pt-1 flex justify-between">
-                <span className="text-muted-foreground">Gender:</span>
-                <span className="font-semibold text-foreground capitalize">
-                  {formData.gender || "Prefer not to say"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Date of Birth:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.dob || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Academic Year:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.year || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Phone:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.phone || "Not added"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Location:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.location || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Website / Portfolio:</span>
-                <span className="font-semibold text-foreground truncate max-w-[150px]">
-                  {formData.website ? (
-                    <a
-                      href={formData.website.startsWith("http") ? formData.website : `https://${formData.website}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-purple-400 hover:underline"
-                    >
-                      {formData.website}
-                    </a>
-                  ) : (
-                    "Not added"
-                  )}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Target Role:</span>
-                <span className="font-semibold text-foreground text-right truncate max-w-[150px]">
-                  {formData.target_role || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Target Company:</span>
-                <span className="font-semibold text-foreground text-right truncate max-w-[150px]">
-                  {formData.target_company || "Not specified"}
-                </span>
-              </div>
-            </div>
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-purple-400" /> Date of Birth
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.dob || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <GraduationCap className="w-3.5 h-3.5 text-purple-400" /> Academic Year
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.year || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 text-purple-400" /> Phone
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.phone || "Not added"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-purple-400" /> Location
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.location || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-purple-400" /> Website / Portfolio
+            </span>
+            <p className="font-semibold text-foreground truncate">
+              {formData.website ? (
+                <a
+                  href={formData.website.startsWith("http") ? formData.website : `https://${formData.website}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-purple-400 hover:underline"
+                >
+                  {formData.website}
+                </a>
+              ) : (
+                "Not added"
+              )}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-purple-400" /> Target Role
+            </span>
+            <p className="font-semibold text-foreground truncate">
+              {formData.target_role || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-purple-400" /> Target Company
+            </span>
+            <p className="font-semibold text-foreground truncate">
+              {formData.target_company || "Not specified"}
+            </p>
           </div>
         </div>
       </div>
@@ -1021,7 +1112,7 @@ export default function Profile() {
               </div>
               <button
                 onClick={handleCancel}
-                className="text-muted-foreground hover:text-foreground p-1 rounded-lg"
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1276,14 +1367,14 @@ export default function Profile() {
                   type="button"
                   onClick={handleCancel}
                   disabled={isSaving}
-                  className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-medium transition-colors"
+                  className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2 rounded-xl text-white font-bold bg-purple-600 hover:bg-purple-500 shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl text-white font-bold bg-purple-600 hover:bg-purple-500 shadow-md flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isSaving ? (
                     <>
@@ -1313,7 +1404,7 @@ export default function Profile() {
               </div>
               <button
                 onClick={() => setIsPasswordModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground p-1 rounded-lg"
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1348,7 +1439,7 @@ export default function Profile() {
                   <button
                     type="button"
                     onClick={() => setShowPasswords(!showPasswords)}
-                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
                   >
                     {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -1384,14 +1475,14 @@ export default function Profile() {
                   type="button"
                   onClick={() => setIsPasswordModalOpen(false)}
                   disabled={isChangingPassword}
-                  className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-medium transition-colors"
+                  className="px-4 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground font-medium transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isChangingPassword}
-                  className="px-5 py-2 rounded-xl text-white font-bold bg-purple-600 hover:bg-purple-500 shadow-md flex items-center gap-2 transition-all disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl text-white font-bold bg-purple-600 hover:bg-purple-500 shadow-md flex items-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isChangingPassword ? (
                     <>
@@ -1421,7 +1512,7 @@ export default function Profile() {
               </div>
               <button
                 onClick={() => setIsAvatarModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground p-1 rounded-lg"
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1449,7 +1540,7 @@ export default function Profile() {
                   type="button"
                   disabled={isUploadingMedia}
                   onClick={() => avatarFileInputRef.current?.click()}
-                  className="w-full py-3 px-4 rounded-xl border border-dashed border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 text-purple-400 font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  className="w-full py-3 px-4 rounded-xl border border-dashed border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 text-purple-400 font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <Camera className="w-4 h-4" />
                   <span>{isUploadingMedia ? "Uploading..." : "Choose Image from Device"}</span>
@@ -1477,7 +1568,7 @@ export default function Profile() {
                     type="button"
                     disabled={isUploadingMedia || !avatarUrlInput.trim()}
                     onClick={handleAvatarUrlSave}
-                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all disabled:opacity-50 cursor-pointer"
                   >
                     Save
                   </button>
@@ -1491,7 +1582,7 @@ export default function Profile() {
                     type="button"
                     disabled={isUploadingMedia}
                     onClick={handleRemoveAvatar}
-                    className="text-xs text-rose-400 hover:underline font-medium"
+                    className="text-xs text-rose-400 hover:underline font-medium cursor-pointer"
                   >
                     Remove Current Photo
                   </button>
@@ -1515,7 +1606,7 @@ export default function Profile() {
               </div>
               <button
                 onClick={() => setIsBannerModalOpen(false)}
-                className="text-muted-foreground hover:text-foreground p-1 rounded-lg"
+                className="text-muted-foreground hover:text-foreground p-1 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1543,7 +1634,7 @@ export default function Profile() {
                   type="button"
                   disabled={isUploadingMedia}
                   onClick={() => bannerFileInputRef.current?.click()}
-                  className="w-full py-3 px-4 rounded-xl border border-dashed border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 text-purple-400 font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                  className="w-full py-3 px-4 rounded-xl border border-dashed border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 text-purple-400 font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   <ImageIcon className="w-4 h-4" />
                   <span>{isUploadingMedia ? "Uploading..." : "Choose Banner from Device"}</span>
@@ -1571,7 +1662,7 @@ export default function Profile() {
                     type="button"
                     disabled={isUploadingMedia || !bannerUrlInput.trim()}
                     onClick={handleBannerUrlSave}
-                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all disabled:opacity-50"
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition-all disabled:opacity-50 cursor-pointer"
                   >
                     Save
                   </button>
@@ -1585,7 +1676,7 @@ export default function Profile() {
                     type="button"
                     disabled={isUploadingMedia}
                     onClick={handleRemoveBanner}
-                    className="text-xs text-rose-400 hover:underline font-medium"
+                    className="text-xs text-rose-400 hover:underline font-medium cursor-pointer"
                   >
                     Remove Cover Banner
                   </button>
