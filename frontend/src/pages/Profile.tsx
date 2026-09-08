@@ -684,7 +684,7 @@ export default function Profile() {
             {/* Center: User Identity Details - Centered */}
             <div className="flex-1 flex flex-col items-center text-center space-y-1.5 px-2">
               <div className="flex items-center justify-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{displayName}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground text-center">{displayName}</h1>
                 {formData.gender && (
                   <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium">
                     {formData.gender}
