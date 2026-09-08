@@ -2,6 +2,7 @@
 // API_URL is empty in dev (Vite proxy handles /api/* → FastAPI).
 // In production it is injected automatically via VITE_BACKEND_URL.
 export const API_URL = import.meta.env?.VITE_BACKEND_URL || "";
+export const GITHUB_CLIENT_ID = import.meta.env?.VITE_GITHUB_CLIENT_ID || "Ov23liQChGtU3XriYdui";
 
 // Canonical storage keys
 export const CANONICAL_TOKEN_KEY = "access_token";

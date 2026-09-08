@@ -4,6 +4,7 @@ from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
     GoogleAuthRequest,
+    GitHubAuthRequest,
     TokenResponse,
     UserResponse,
     ChangePasswordRequest,
@@ -13,6 +14,7 @@ from app.services.auth_service import (
     create_user,
     authenticate_user,
     authenticate_or_create_google_user,
+    authenticate_or_create_github_user,
     change_user_password,
 )
 from app.core.security import create_access_token, decode_access_token
@@ -145,6 +147,46 @@ async def google_auth(request: GoogleAuthRequest):
         )
 
     display_name = user.get("name") or user.get("full_name") or "Student"
+    token = create_access_token({
+        "sub": user.get("id"),
+        "email": user.get("email"),
+        "name": display_name,
+    })
+
+    user_dict = {
+        "id": user.get("id", ""),
+        "name": display_name,
+        "full_name": user.get("full_name") or display_name,
+        "email": user.get("email", ""),
+        "college": user.get("college", ""),
+        "department": user.get("department", ""),
+        "year": user.get("year", ""),
+        "skills": user.get("skills", []) or [],
+        "avatar": user.get("avatar", ""),
+        "bio": user.get("bio", ""),
+        "phone": user.get("phone", ""),
+        "github": user.get("github", ""),
+        "linkedin": user.get("linkedin", ""),
+        "gender": user.get("gender", ""),
+    }
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user_dict,
+    }
+
+
+@router.post("/github", response_model=TokenResponse)
+async def github_auth(request: GitHubAuthRequest):
+    user = await authenticate_or_create_github_user(request.code)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid GitHub authorization code or GitHub authentication failed",
+        )
+
+    display_name = user.get("name") or user.get("full_name") or "Developer"
     token = create_access_token({
         "sub": user.get("id"),
         "email": user.get("email"),
