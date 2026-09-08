@@ -22,6 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithGoogle: (credential: string) => Promise<{ success: boolean; error?: string }>;
   register: (
     fullName: string,
     email: string,
@@ -154,6 +155,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (credential: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        return { success: false, error: data.detail || "Google authentication failed" };
+      }
+
+      const authenticatedUser: User = {
+        id: data.user?.id || `u-${Date.now()}`,
+        name: data.user?.name || data.user?.full_name || "Google User",
+        full_name: data.user?.full_name || data.user?.name,
+        email: data.user?.email || "",
+        avatar: data.user?.avatar || DEMO_AVATAR,
+        level: data.user?.level || 1,
+        xp: data.user?.xp || 100,
+        coins: data.user?.coins || 50,
+        department: data.user?.department || "Computer Science & Engineering",
+        college: data.user?.college || "Placement Candidate",
+        role: "SDE Aspirant",
+        gender: data.user?.gender || "",
+      };
+
+      const receivedToken = data.access_token || data.token || "demo-jwt-token";
+      setUser(authenticatedUser);
+      setToken(receivedToken);
+      setAuthUser(authenticatedUser);
+      setAuthToken(receivedToken);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err?.message || "Failed to connect to authentication server" };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const register = async (
     fullName: string,
     email: string,
@@ -251,6 +295,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isLoading,
         login,
+        loginWithGoogle,
         register,
         logout,
         updateUser,

@@ -19,6 +19,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleAuthRequest(BaseModel):
+    credential: str
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
