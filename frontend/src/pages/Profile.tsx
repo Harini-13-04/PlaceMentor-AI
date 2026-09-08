@@ -804,11 +804,11 @@ export default function Profile() {
       </div>
 
       {/* =========================================================================
-          SECTION 2: SKILLS, LEARNING MATRIX & SCREENING STATUS
+          SECTION 2: SKILLS, LANGUAGES, COMPETENCY MATRIX & SCREENING STATUS
          ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Technical Skills, Languages & Learning Levels */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* Left Column: Technical Skills & Programming Languages */}
+        <div className="lg:col-span-7 space-y-6">
           {/* Card 1: Verified Technical Skills */}
           <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
             <div className="flex items-center justify-between">
@@ -918,8 +918,38 @@ export default function Profile() {
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Card 3: Learning Matrix Levels */}
+        {/* Right Column: Screening Status & Learning Competency Matrix */}
+        <div className="lg:col-span-5 space-y-6">
+          {/* Placement Screening Status */}
+          <div className="p-5 rounded-2xl border border-border bg-card space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-foreground">Placement Screening Status</h3>
+              <Zap className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="p-4 rounded-xl bg-secondary/40 border border-border text-center space-y-1">
+              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Overall Readiness Index</p>
+              <p className="text-3xl font-extrabold font-mono text-purple-400">
+                {readinessScore !== null ? `${readinessScore}%` : "0%"}
+              </p>
+              <p
+                className={`text-xs font-semibold ${
+                  hasReadiness && readinessScore !== null && readinessScore >= 75
+                    ? "text-emerald-400"
+                    : "text-amber-400"
+                }`}
+              >
+                {hasReadiness
+                  ? readinessScore !== null && readinessScore >= 75
+                    ? "Tier-1 Qualified"
+                    : "In Progress"
+                  : "Baseline Needed"}
+              </p>
+            </div>
+          </div>
+
+          {/* Learning Matrix Levels */}
           <div className="p-5 rounded-2xl border border-border bg-card space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -934,7 +964,7 @@ export default function Profile() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 rounded-xl bg-secondary/40 border border-border space-y-1">
                 <span className="text-[11px] text-muted-foreground font-medium">Programming</span>
                 <p className="font-bold text-foreground capitalize">
@@ -962,100 +992,107 @@ export default function Profile() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Right Column: Placement Readiness & Career Profile */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Placement Screening Index */}
-          <div className="p-5 rounded-2xl border border-border bg-card space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-foreground">Placement Screening Status</h3>
-              <Zap className="w-4 h-4 text-amber-400" />
-            </div>
-            <div className="p-4 rounded-xl bg-secondary/40 border border-border text-center space-y-1">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Overall Readiness Index</p>
-              <p className="text-3xl font-extrabold font-mono text-purple-400">
-                {readinessScore !== null ? `${readinessScore}%` : "0%"}
-              </p>
-              <p
-                className={`text-xs font-semibold ${
-                  hasReadiness && readinessScore !== null && readinessScore >= 75
-                    ? "text-emerald-400"
-                    : "text-amber-400"
-                }`}
-              >
-                {hasReadiness
-                  ? readinessScore !== null && readinessScore >= 75
-                    ? "Tier-1 Qualified"
-                    : "In Progress"
-                  : "Baseline Needed"}
-              </p>
-            </div>
+      {/* =========================================================================
+          SECTION 3: PERSONAL & CAREER PROFILE (FULL WIDTH AT BOTTOM)
+         ========================================================================= */}
+      <div className="p-6 rounded-2xl border border-border bg-card space-y-4 shadow-sm">
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-2">
+            <UserIcon className="w-4 h-4 text-purple-400" />
+            <h3 className="text-sm font-bold text-foreground">Personal & Career Profile</h3>
+          </div>
+          <button
+            onClick={() => setIsEditing(true)}
+            className="text-xs text-purple-400 hover:underline font-medium cursor-pointer flex items-center gap-1"
+          >
+            <Edit3 className="w-3.5 h-3.5" /> Edit Details
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-xs">
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <UserIcon className="w-3.5 h-3.5 text-purple-400" /> Gender
+            </span>
+            <p className="font-semibold text-foreground capitalize">
+              {formData.gender || "Prefer not to say"}
+            </p>
           </div>
 
-          {/* Academic & Career Profile Summary */}
-          <div className="p-5 rounded-2xl border border-border bg-card space-y-3 text-xs">
-            <h3 className="text-sm font-bold text-foreground">Personal & Career Profile</h3>
-            <div className="space-y-2.5 divide-y divide-border">
-              <div className="pt-1 flex justify-between">
-                <span className="text-muted-foreground">Gender:</span>
-                <span className="font-semibold text-foreground capitalize">
-                  {formData.gender || "Prefer not to say"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Date of Birth:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.dob || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Academic Year:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.year || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Phone:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.phone || "Not added"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Location:</span>
-                <span className="font-semibold text-foreground">
-                  {formData.location || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Website / Portfolio:</span>
-                <span className="font-semibold text-foreground truncate max-w-[150px]">
-                  {formData.website ? (
-                    <a
-                      href={formData.website.startsWith("http") ? formData.website : `https://${formData.website}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-purple-400 hover:underline"
-                    >
-                      {formData.website}
-                    </a>
-                  ) : (
-                    "Not added"
-                  )}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Target Role:</span>
-                <span className="font-semibold text-foreground text-right truncate max-w-[150px]">
-                  {formData.target_role || "Not specified"}
-                </span>
-              </div>
-              <div className="pt-2 flex justify-between">
-                <span className="text-muted-foreground">Target Company:</span>
-                <span className="font-semibold text-foreground text-right truncate max-w-[150px]">
-                  {formData.target_company || "Not specified"}
-                </span>
-              </div>
-            </div>
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-purple-400" /> Date of Birth
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.dob || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <GraduationCap className="w-3.5 h-3.5 text-purple-400" /> Academic Year
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.year || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 text-purple-400" /> Phone
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.phone || "Not added"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-purple-400" /> Location
+            </span>
+            <p className="font-semibold text-foreground">
+              {formData.location || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-purple-400" /> Website / Portfolio
+            </span>
+            <p className="font-semibold text-foreground truncate">
+              {formData.website ? (
+                <a
+                  href={formData.website.startsWith("http") ? formData.website : `https://${formData.website}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-purple-400 hover:underline"
+                >
+                  {formData.website}
+                </a>
+              ) : (
+                "Not added"
+              )}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-purple-400" /> Target Role
+            </span>
+            <p className="font-semibold text-foreground truncate">
+              {formData.target_role || "Not specified"}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-secondary/40 border border-border space-y-1">
+            <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-purple-400" /> Target Company
+            </span>
+            <p className="font-semibold text-foreground truncate">
+              {formData.target_company || "Not specified"}
+            </p>
           </div>
         </div>
       </div>
