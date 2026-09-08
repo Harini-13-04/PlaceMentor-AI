@@ -656,65 +656,67 @@ export default function Profile() {
 
         {/* Profile Details Bar */}
         <div className="px-6 pb-6 sm:px-8 sm:pb-8 pt-0 space-y-5">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Left: Avatar overlapping banner */}
-            <div className="relative group shrink-0 -mt-14 sm:-mt-16 z-10 self-start sm:self-auto">
-              {resolvedAvatarUrl && !avatarError ? (
-                <img
-                  src={resolvedAvatarUrl}
-                  alt={displayName}
-                  onError={() => setAvatarError(true)}
-                  onLoad={() => setAvatarError(false)}
-                  className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 border-card object-cover shadow-xl bg-card"
-                />
-              ) : (
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 border-card bg-purple-500/10 flex items-center justify-center font-bold text-2xl sm:text-3xl text-purple-600 dark:text-purple-400 font-display shadow-xl">
-                  {initials}
-                </div>
-              )}
-              <button
-                onClick={() => setIsAvatarModalOpen(true)}
-                className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200 cursor-pointer z-20"
-                title="Update profile photo"
-              >
-                <Camera className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Center: User Identity Details - Centered */}
-            <div className="flex-1 flex flex-col items-center text-center space-y-1.5 px-2">
-              <div className="flex items-center justify-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground text-center">{displayName}</h1>
-                {formData.gender && (
-                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium">
-                    {formData.gender}
-                  </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-5">
+              {/* Left: Avatar overlapping banner */}
+              <div className="relative group shrink-0 -mt-14 sm:-mt-16 z-10 self-start sm:self-auto">
+                {resolvedAvatarUrl && !avatarError ? (
+                  <img
+                    src={resolvedAvatarUrl}
+                    alt={displayName}
+                    onError={() => setAvatarError(true)}
+                    onLoad={() => setAvatarError(false)}
+                    className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 border-card object-cover shadow-xl bg-card"
+                  />
+                ) : (
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl border-4 border-card bg-purple-500/10 flex items-center justify-center font-bold text-2xl sm:text-3xl text-purple-600 dark:text-purple-400 font-display shadow-xl">
+                    {initials}
+                  </div>
                 )}
+                <button
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  className="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity duration-200 cursor-pointer z-20"
+                  title="Update profile photo"
+                >
+                  <Camera className="w-6 h-6" />
+                </button>
               </div>
 
-              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
-                {formData.target_role ? formData.target_role : "Target Role: Not set"}
-                {formData.target_company ? ` • ${formData.target_company}` : ""}
-              </p>
+              {/* User Identity Details - Left-aligned next to Profile Photo */}
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">{displayName}</h1>
+                  {formData.gender && (
+                    <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-secondary border border-border text-muted-foreground font-medium">
+                      {formData.gender}
+                    </span>
+                  )}
+                </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 text-xs text-muted-foreground pt-0.5">
-                <span className="flex items-center gap-1 font-mono text-purple-400 font-semibold px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                  <Sparkles className="w-3.5 h-3.5" /> Level {userLevel}
-                </span>
-                <span className="font-mono text-foreground px-2 py-0.5 rounded-lg bg-secondary border border-border">
-                  {userXp} XP
-                </span>
-                <span className="font-mono text-emerald-400 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  {solvedCount} Solved
-                </span>
-                <span className="font-mono text-indigo-400 px-2 py-0.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                  {attemptedCount} Attempts
-                </span>
+                <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+                  {formData.target_role ? formData.target_role : "Target Role: Not set"}
+                  {formData.target_company ? ` • ${formData.target_company}` : ""}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs text-muted-foreground pt-0.5">
+                  <span className="flex items-center gap-1 font-mono text-purple-400 font-semibold px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                    <Sparkles className="w-3.5 h-3.5" /> Level {userLevel}
+                  </span>
+                  <span className="font-mono text-foreground px-2 py-0.5 rounded-lg bg-secondary border border-border">
+                    {userXp} XP
+                  </span>
+                  <span className="font-mono text-emerald-400 px-2 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    {solvedCount} Solved
+                  </span>
+                  <span className="font-mono text-indigo-400 px-2 py-0.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                    {attemptedCount} Attempts
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Right: Profile Action Buttons */}
-            <div className="flex items-center gap-2 shrink-0 self-center sm:self-center">
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
               <button
                 onClick={() => setIsPasswordModalOpen(true)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-border bg-secondary/70 hover:bg-secondary text-xs font-semibold text-foreground transition-colors shadow-sm cursor-pointer"
