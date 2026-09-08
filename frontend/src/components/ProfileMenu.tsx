@@ -34,6 +34,8 @@ export default function ProfileMenu() {
     navigate("/profile");
   };
 
+  const initialLetter = (user?.name || user?.full_name || "S")[0].toUpperCase();
+
   return (
     <div className="relative font-sans" ref={menuRef}>
       {/* Profile Trigger Container */}
@@ -45,15 +47,21 @@ export default function ProfileMenu() {
           title="View Profile"
           className="flex items-center gap-2.5 pl-2.5 pr-1.5 py-1.5 cursor-pointer text-left group"
         >
-          <img
-            src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
-            alt="Profile"
-            className="w-7 h-7 rounded-full border border-purple-500/40 object-cover group-hover:scale-105 transition-transform"
-          />
+          {user?.avatar ? (
+            <img
+              src={user.avatar}
+              alt="Profile"
+              className="w-7 h-7 rounded-full border border-purple-500/40 object-cover group-hover:scale-105 transition-transform"
+            />
+          ) : (
+            <div className="w-7 h-7 rounded-full border border-purple-500/40 bg-purple-500/10 flex items-center justify-center font-bold text-xs text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform">
+              {initialLetter}
+            </div>
+          )}
 
           <div className="hidden sm:block text-left">
             <p className="text-xs font-bold text-foreground leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-              {user?.name || "Student"}
+              {user?.name || user?.full_name || "Student"}
             </p>
             <p className="text-[10px] text-muted-foreground">{user?.department || "CSE"}</p>
           </div>
@@ -87,13 +95,19 @@ export default function ProfileMenu() {
             className="p-3 border-b border-border bg-secondary/40 flex items-center gap-2.5 cursor-pointer hover:bg-secondary/70 transition-colors"
             title="Open Profile"
           >
-            <img
-              src={user?.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"}
-              alt="Profile"
-              className="w-8 h-8 rounded-full border border-purple-500/40 object-cover shrink-0"
-            />
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt="Profile"
+                className="w-8 h-8 rounded-full border border-purple-500/40 object-cover shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full border border-purple-500/40 bg-purple-500/10 flex items-center justify-center font-bold text-sm text-purple-600 dark:text-purple-400 shrink-0">
+                {initialLetter}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-foreground truncate">{user?.name || "Student"}</p>
+              <p className="text-xs font-bold text-foreground truncate">{user?.name || user?.full_name || "Student"}</p>
               <p className="text-[10px] text-muted-foreground truncate font-mono">{user?.email || "student@example.com"}</p>
             </div>
           </div>
@@ -125,4 +139,4 @@ export default function ProfileMenu() {
       )}
     </div>
   );
-}
+}

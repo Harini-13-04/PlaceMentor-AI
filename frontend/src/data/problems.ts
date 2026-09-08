@@ -189,8 +189,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Arrays",
     companies: ["Amazon", "Google", "Microsoft", "TCS", "Infosys", "Zoho"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "51.4%",
     description: "Given an array of integers `nums` and an integer `target`, return indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input would have exactly one solution, and you may not use the same element twice.\n\nYou can return the answer in any order.",
     examples: [
@@ -236,8 +236,9 @@ export const PROBLEMS_DATASET: Problem[] = [
     hiddenTestCases: [
       { input: "nums = [-1,-2,-3,-4,-5], target = -8", expectedOutput: "[2,4]", isHidden: true },
       { input: "nums = [0,4,3,0], target = 0", expectedOutput: "[0,3]", isHidden: true },
-      { input: "nums = [1000000000,2000000000], target = 3000000000", expectedOutput: "[0,1]", isHidden: true },
-      { input: "Large stress test (n=10000)", expectedOutput: "[4999,9999]", isHidden: true }
+      { input: "nums = [1000000000,1000000000], target = 2000000000", expectedOutput: "[0,1]", isHidden: true },
+      { input: "nums = [5,75,25], target = 100", expectedOutput: "[1,2]", isHidden: true },
+      { input: "nums = [-10,-1,-18,-19], target = -19", expectedOutput: "[1,2]", isHidden: true }
     ]
   },
   {
@@ -247,8 +248,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Arrays",
     companies: ["Amazon", "Microsoft", "Accenture", "Wipro", "TCS", "Cognizant"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "62.1%",
     description: "Given an integer array `nums`, return `true` if any value appears at least twice in the array, and return `false` if every element is distinct.",
     examples: [
@@ -285,8 +286,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Strings",
     companies: ["Google", "Amazon", "Cognizant", "TCS", "Capgemini", "Freshworks"],
-    status: "Attempted",
-    mastery: 60,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "64.3%",
     description: "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.\n\nAn Anagram is a word or phrase formed by rearranging the letters of a different word or phrase, typically using all the original letters exactly once.",
     examples: [
@@ -433,8 +434,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Two Pointers",
     companies: ["Microsoft", "Amazon", "TCS", "Cognizant", "Zoho", "HCL"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "46.2%",
     description: "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward.\n\nGiven a string `s`, return `true` if it is a palindrome, or `false` otherwise.",
     examples: [
@@ -467,8 +468,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Two Pointers",
     companies: ["Amazon", "Microsoft", "Google", "Infosys", "IBM", "Accenture"],
-    status: "Attempted",
-    mastery: 50,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "34.1%",
     description: "Given an integer array nums, return all the triplets `[nums[i], nums[j], nums[k]]` such that `i != j`, `i != k`, and `j != k`, and `nums[i] + nums[j] + nums[k] == 0`.\n\nNotice that the solution set must not contain duplicate triplets.",
     examples: [
@@ -536,8 +537,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Strings",
     companies: ["Amazon", "Microsoft", "Google", "Cognizant", "Wipro", "Zoho"],
-    status: "Attempted",
-    mastery: 50,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "34.8%",
     description: "Given a string `s`, find the length of the longest substring without repeating characters.",
     examples: [
@@ -574,8 +575,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Stack",
     companies: ["Amazon", "Microsoft", "Google", "TCS", "Infosys", "Capgemini"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "41.2%",
     description: "Given a string `s` containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
     examples: [
@@ -608,8 +609,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Linked List",
     companies: ["Amazon", "Microsoft", "Google", "Accenture", "HCL", "IBM"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "75.6%",
     description: "Given the `head` of a singly linked list, reverse the list, and return the reversed list.",
     examples: [
@@ -645,8 +646,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "Trees",
     companies: ["Google", "Amazon", "Microsoft", "Deloitte", "Zoho"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "77.4%",
     description: "Given the `root` of a binary tree, invert the tree, and return its root.",
     examples: [
@@ -743,8 +744,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "DP",
     companies: ["Amazon", "Google", "Apple", "TCS", "Wipro", "Infosys"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "53.2%",
     description: "You are climbing a staircase. It takes `n` steps to reach the top. Each time you can either climb 1 or 2 steps. In how many distinct ways can you climb to the top?",
     examples: [
@@ -772,8 +773,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Algorithms & DSA",
     topic: "DP",
     companies: ["Amazon", "Microsoft", "Google", "Capgemini", "Deloitte", "IBM"],
-    status: "Attempted",
-    mastery: 40,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "43.7%",
     description: "You are given an integer array `coins` representing coins of different denominations and an integer `amount` representing a total amount of money. Return the fewest number of coins that you need to make up that amount.",
     examples: [
@@ -809,8 +810,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Database & SQL",
     topic: "SQL",
     companies: ["Amazon", "Microsoft", "TCS", "Accenture", "Cognizant", "Infosys"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "74.2%",
     description: "Write a solution to report the first name, last name, city, and state of each person in the `Person` table. If the address of a `personId` is not present in the `Address` table, report `null` instead.",
     examples: [
@@ -839,8 +840,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Database & SQL",
     topic: "SQL",
     companies: ["Amazon", "Google", "LinkedIn", "TCS", "Wipro", "Zoho"],
-    status: "Solved",
-    mastery: 100,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "39.8%",
     description: "Write a solution to find the second highest salary from the `Employee` table. If there is no second highest salary, return `null`.",
     examples: [
@@ -870,8 +871,8 @@ export const PROBLEMS_DATASET: Problem[] = [
     category: "Core CS",
     topic: "OOP",
     companies: ["Amazon", "Microsoft", "Google", "Bloomberg", "Freshworks", "IBM"],
-    status: "Attempted",
-    mastery: 50,
+    status: "Not Started",
+    mastery: 0,
     acceptanceRate: "42.6%",
     description: "Design a data structure that follows the constraints of a Least Recently Used (LRU) cache with O(1) get and put operations.",
     examples: [

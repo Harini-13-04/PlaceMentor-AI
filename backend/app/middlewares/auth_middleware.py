@@ -10,28 +10,20 @@ security = HTTPBearer(auto_error=False)
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
-    default_demo_user = {
-        "id": "u-demo-101",
-        "full_name": "Harini Muthuvel",
-        "name": "Harini Muthuvel",
-        "email": "harini.muthuvel@srmist.edu.in",
-        "is_active": True,
-    }
-
     if not credentials or not credentials.credentials:
-        return default_demo_user
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication credentials were not provided",
+        )
 
     token = credentials.credentials
-
-    # Demo mode fallback
-    if token in ["demo-token", "demo-jwt-token"] or token.startswith("demo"):
-        return default_demo_user
-
     payload = decode_access_token(token)
 
     if not payload or "sub" not in payload:
-        # Fallback to demo user if token is expired or invalid
-        return default_demo_user
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired authentication token",
+        )
 
     user_identifier = payload["sub"]
 
@@ -44,10 +36,10 @@ async def get_current_user(
         user = None
 
     if not user:
-        if user_identifier.startswith("u-demo") or "demo" in user_identifier or user_identifier == "harini.muthuvel@srmist.edu.in":
-            return default_demo_user
-        # Return fallback user if not found in local DB during dev
-        return default_demo_user
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
 
     if not user.get("is_active", True):
         raise HTTPException(
@@ -67,3 +59,4 @@ async def get_optional_current_user(
         return await get_current_user(credentials)
     except Exception:
         return None
+

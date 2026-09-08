@@ -400,37 +400,24 @@ async def gd_websocket_endpoint(
     # Authenticate token
     user = None
     if token:
-        if token in ["demo-token", "demo-jwt-token"] or token.startswith("demo"):
-            user = {
-                "id": "u-demo-101",
-                "full_name": "Harini Muthuvel",
-                "name": "Harini Muthuvel",
-                "email": "harini.muthuvel@srmist.edu.in",
-            }
-        else:
-            payload = decode_access_token(token)
-            if payload and "sub" in payload:
-                user_id_sub = payload["sub"]
-                try:
-                    db_user = await users_collection.find_one(
-                        {"$or": [{"id": user_id_sub}, {"email": user_id_sub}]},
-                        {"_id": 0}
-                    )
-                    if db_user:
-                        user = db_user
-                    else:
-                        user = {"id": user_id_sub, "full_name": "User", "name": "User"}
-                except Exception:
-                    user = {"id": user_id_sub, "full_name": "User", "name": "User"}
+        payload = decode_access_token(token)
+        if payload and "sub" in payload:
+            user_id_sub = payload["sub"]
+            try:
+                db_user = await users_collection.find_one(
+                    {"$or": [{"id": user_id_sub}, {"email": user_id_sub}]},
+                    {"_id": 0}
+                )
+                if db_user:
+                    user = db_user
+                else:
+                    user = {"id": user_id_sub, "full_name": payload.get("name", "User"), "name": payload.get("name", "User")}
+            except Exception:
+                user = {"id": user_id_sub, "full_name": payload.get("name", "User"), "name": payload.get("name", "User")}
 
     if not user:
-        # Fallback to demo user if no token provided during dev WebSocket handshake
-        user = {
-            "id": "u-demo-101",
-            "full_name": "Harini Muthuvel",
-            "name": "Harini Muthuvel",
-            "email": "harini.muthuvel@srmist.edu.in",
-        }
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Authentication required")
+        return
 
     user_id = user["id"]
 

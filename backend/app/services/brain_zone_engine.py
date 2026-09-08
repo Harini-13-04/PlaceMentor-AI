@@ -649,7 +649,10 @@ def generate_brain_challenge(
 async def get_user_brain_progress(user_id: str) -> Dict[str, Any]:
     """
     Fetches Brain Zone progression, XP, coins, gems, treasures, and world unlocks.
+    Computes real streak dynamically from genuine activity history.
     """
+    from app.services.streak_service import calculate_user_streak
+
     doc = await brain_zone_progress_collection.find_one({"user_id": user_id}, {"_id": 0})
     if not doc:
         doc = {
@@ -704,6 +707,10 @@ async def get_user_brain_progress(user_id: str) -> Dict[str, Any]:
     if w_prog.get("focus-volcano", 0) >= 20:
         unlocked.append("brain-castle")
     doc["unlocked_worlds"] = unlocked
+
+    # Dynamic real streak calculation
+    doc["streak_days"] = await calculate_user_streak(user_id)
+    doc["streak"] = doc["streak_days"]
 
     return doc
 

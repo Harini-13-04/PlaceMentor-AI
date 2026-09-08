@@ -1,5 +1,7 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/context/AuthContext";
+import { API_URL, getAuthHeaders } from "@/config";
 import {
   Target,
   CheckCircle2,
@@ -25,71 +27,162 @@ interface Goal {
   xpReward: number;
 }
 
-const INITIAL_GOALS: Goal[] = [
-  {
-    id: "g1",
-    title: "Solve 10 LeetCode-style DSA questions",
-    category: "DSA & Coding",
-    current: 7,
-    target: 10,
-    unit: "problems",
-    completed: false,
-    xpReward: 200,
-  },
-  {
-    id: "g2",
-    title: "Complete 3 Voice Speaking Scenarios",
-    category: "Communication",
-    current: 3,
-    target: 3,
-    unit: "scenarios",
-    completed: true,
-    xpReward: 150,
-  },
-  {
-    id: "g3",
-    title: "Run ATS Scan & Fix 2 Resume Sections",
-    category: "Resume",
-    current: 2,
-    target: 2,
-    unit: "fixes",
-    completed: true,
-    xpReward: 100,
-  },
-  {
-    id: "g4",
-    title: "Review DBMS & Operating Systems Notes",
-    category: "Mock Prep",
-    current: 1,
-    target: 2,
-    unit: "topics",
-    completed: false,
-    xpReward: 120,
-  },
-];
-
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const WEEK_STATUS = [true, true, true, true, false, false, false];
 
 export default function WeeklyGoals() {
-  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [problemStats, setProblemStats] = useState<any>(null);
+  const [assessmentHistory, setAssessmentHistory] = useState<any[]>([]);
+  const [brainProgress, setBrainProgress] = useState<any>(null);
+  const [customGoals, setCustomGoals] = useState<Goal[]>([]);
+
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState<Goal["category"]>("DSA & Coding");
   const [newTarget, setNewTarget] = useState("5");
 
-  const toggleGoal = (id: string) => {
-    setGoals(
-      goals.map((g) =>
-        g.id === id ? { ...g, completed: !g.completed, current: !g.completed ? g.target : 0 } : g
-      )
+  // Load custom goals for current user
+  useEffect(() => {
+    if (user?.id) {
+      const saved = localStorage.getItem(`pm_goals_${user.id}`);
+      if (saved) {
+        try {
+          setCustomGoals(JSON.parse(saved));
+        } catch {
+          setCustomGoals([]);
+        }
+      }
+    }
+  }, [user?.id]);
+
+  // Fetch real performance data
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const headers = getAuthHeaders(true);
+        const [pRes, aRes, bRes] = await Promise.all([
+          fetch(`${API_URL}/api/problems/stats`, { headers }),
+          fetch(`${API_URL}/api/assessments/history`, { headers }),
+          fetch(`${API_URL}/api/brainzone/progress`, { headers }),
+        ]);
+
+        if (pRes.ok) setProblemStats(await pRes.json());
+        if (aRes.ok) {
+          const aData = await aRes.json();
+          setAssessmentHistory(aData.attempts || []);
+        }
+        if (bRes.ok) setBrainProgress(await bRes.json());
+      } catch (err) {
+        console.error("Failed to fetch goals data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  // Calculate real metrics
+  const solvedCount = problemStats?.solved_count || 0;
+  const aptCount = assessmentHistory.filter((a) => a.assessment_type === "aptitude").length;
+  const quizCount = assessmentHistory.filter((a) => a.assessment_type === "quiz").length;
+  const bzCount = brainProgress?.completed_levels_count || 0;
+
+  // Real system goals backed by MongoDB evidence
+  const systemGoals: Goal[] = [
+    {
+      id: "sys-coding",
+      title: "Solve Algorithmic DSA Problems",
+      category: "DSA & Coding",
+      current: solvedCount,
+      target: 10,
+      unit: "problems",
+      completed: solvedCount >= 10,
+      xpReward: 200,
+    },
+    {
+      id: "sys-aptitude",
+      title: "Complete Quantitative Aptitude Practice",
+      category: "Mock Prep",
+      current: aptCount,
+      target: 5,
+      unit: "tests",
+      completed: aptCount >= 5,
+      xpReward: 150,
+    },
+    {
+      id: "sys-quiz",
+      title: "Pass Core Computer Science Quizzes",
+      category: "Mock Prep",
+      current: quizCount,
+      target: 5,
+      unit: "quizzes",
+      completed: quizCount >= 5,
+      xpReward: 150,
+    },
+    {
+      id: "sys-brain",
+      title: "Complete Brain Zone Cognitive Puzzles",
+      category: "DSA & Coding",
+      current: bzCount,
+      target: 5,
+      unit: "levels",
+      completed: bzCount >= 5,
+      xpReward: 100,
+    },
+  ];
+
+  const allGoals = [...systemGoals, ...customGoals];
+
+  // Calculate real week activity indicators (Monday to Sunday)
+  const now = new Date();
+  const dayOfWeek = (now.getDay() + 6) % 7; // 0 = Mon, 6 = Sun
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - dayOfWeek);
+  monday.setHours(0, 0, 0, 0);
+
+  const activeDatesThisWeek = new Set<number>();
+  // Check assessment dates
+  assessmentHistory.forEach((att) => {
+    if (att.timestamp) {
+      const d = new Date(att.timestamp);
+      if (d >= monday) {
+        const dIdx = (d.getDay() + 6) % 7;
+        activeDatesThisWeek.add(dIdx);
+      }
+    }
+  });
+  // Check brain zone history
+  if (brainProgress?.recent_history) {
+    brainProgress.recent_history.forEach((h: any) => {
+      if (h.timestamp) {
+        const d = new Date(h.timestamp);
+        if (d >= monday) {
+          const dIdx = (d.getDay() + 6) % 7;
+          activeDatesThisWeek.add(dIdx);
+        }
+      }
+    });
+  }
+
+  const weekStatus = WEEK_DAYS.map((_, idx) => activeDatesThisWeek.has(idx));
+
+  const toggleCustomGoal = (id: string) => {
+    const updated = customGoals.map((g) =>
+      g.id === id ? { ...g, completed: !g.completed, current: !g.completed ? g.target : 0 } : g
     );
+    setCustomGoals(updated);
+    if (user?.id) {
+      localStorage.setItem(`pm_goals_${user.id}`, JSON.stringify(updated));
+    }
   };
 
   const addGoal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
     const goal: Goal = {
-      id: `g-${Date.now()}`,
+      id: `custom-${Date.now()}`,
       title: newTitle.trim(),
       category: newCategory,
       current: 0,
@@ -98,16 +191,24 @@ export default function WeeklyGoals() {
       completed: false,
       xpReward: 150,
     };
-    setGoals([...goals, goal]);
+    const updated = [...customGoals, goal];
+    setCustomGoals(updated);
+    if (user?.id) {
+      localStorage.setItem(`pm_goals_${user.id}`, JSON.stringify(updated));
+    }
     setNewTitle("");
   };
 
   const deleteGoal = (id: string) => {
-    setGoals(goals.filter((g) => g.id !== id));
+    const updated = customGoals.filter((g) => g.id !== id);
+    setCustomGoals(updated);
+    if (user?.id) {
+      localStorage.setItem(`pm_goals_${user.id}`, JSON.stringify(updated));
+    }
   };
 
-  const completedCount = goals.filter((g) => g.completed).length;
-  const progressPercent = Math.round((completedCount / goals.length) * 100) || 0;
+  const completedCount = allGoals.filter((g) => g.completed).length;
+  const progressPercent = Math.round((completedCount / Math.max(1, allGoals.length)) * 100) || 0;
 
   return (
     <div className="space-y-6 font-sans text-foreground">
@@ -126,13 +227,13 @@ export default function WeeklyGoals() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center sm:text-left">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-400 text-xs font-semibold">
-              <Calendar className="w-3.5 h-3.5" /> Sprint Week 34 &middot; Aug 2026
+              <Calendar className="w-3.5 h-3.5" /> Sprint Week &middot; {new Date().toLocaleDateString(undefined, { month: "short", year: "numeric" })}
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-foreground">
-              {completedCount} of {goals.length} Weekly Goals Cleared
+              {completedCount} of {allGoals.length} Weekly Goals Cleared
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground max-w-lg leading-relaxed">
-              You are on pace to complete 100% of this week's targets before Sunday.
+              Track real goals derived from your verified problem solving and assessment activity.
             </p>
           </div>
 
@@ -148,21 +249,21 @@ export default function WeeklyGoals() {
         {/* Daily Streak Tracker */}
         <div className="pt-6 border-t border-border mt-6">
           <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2.5">
-            Daily Goal Activity
+            Daily Goal Activity (This Week)
           </p>
           <div className="grid grid-cols-7 gap-2">
             {WEEK_DAYS.map((day, i) => (
               <div
                 key={day}
                 className={`p-2.5 rounded-lg border text-center space-y-1 ${
-                  WEEK_STATUS[i]
+                  weekStatus[i]
                     ? "border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-400"
                     : "border-border bg-secondary/50 text-muted-foreground"
                 }`}
               >
                 <p className="text-[10px] font-bold uppercase">{day}</p>
                 <div className="flex justify-center">
-                  {WEEK_STATUS[i] ? (
+                  {weekStatus[i] ? (
                     <CheckCircle2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                   ) : (
                     <Circle className="w-4 h-4 text-muted-foreground" />
@@ -180,11 +281,11 @@ export default function WeeklyGoals() {
         <div className="lg:col-span-8 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-foreground">Target Checklist</h2>
-            <span className="text-xs text-muted-foreground">{goals.length} total goals</span>
+            <span className="text-xs text-muted-foreground">{allGoals.length} total goals</span>
           </div>
 
           <div className="space-y-2.5">
-            {goals.map((g) => (
+            {allGoals.map((g) => (
               <div
                 key={g.id}
                 className={`p-4 rounded-xl border bg-card transition-all flex items-center justify-between gap-4 ${
@@ -195,7 +296,7 @@ export default function WeeklyGoals() {
               >
                 <div className="flex items-center gap-3.5">
                   <button
-                    onClick={() => toggleGoal(g.id)}
+                    onClick={() => !g.id.startsWith("sys-") && toggleCustomGoal(g.id)}
                     className="text-teal-600 dark:text-teal-400 hover:scale-110 transition-transform shrink-0"
                   >
                     {g.completed ? (
@@ -227,12 +328,14 @@ export default function WeeklyGoals() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => deleteGoal(g.id)}
-                  className="text-muted-foreground hover:text-rose-500 transition-colors p-1"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {!g.id.startsWith("sys-") && (
+                  <button
+                    onClick={() => deleteGoal(g.id)}
+                    className="text-muted-foreground hover:text-rose-500 transition-colors p-1"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             ))}
           </div>

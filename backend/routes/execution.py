@@ -209,15 +209,6 @@ def parse_test_input_values(input_str: str, problem_id: str = "") -> List[Any]:
     if not s:
         return []
 
-    if "Large stress test" in s or "n=10000" in s:
-        if problem_id == "two-sum":
-            arr = [1] * 10000
-            arr[4999] = 100
-            arr[9999] = 200
-            return [arr, 300]
-        elif problem_id == "contains-duplicate":
-            return [list(range(10000))]
-
     parts = re.split(r",\s*(?=[a-zA-Z_][a-zA-Z0-9_]*\s*=)", s)
     if len(parts) > 1 or "=" in s:
         args = []
@@ -256,10 +247,30 @@ def compare_actual_expected(actual: Any, expected_str: str, problem_id: str) -> 
     if norm_act == norm_exp:
         return True, "Passed"
 
-    try:
-        act_obj = json.loads(norm_act) if isinstance(norm_act, str) and norm_act.startswith(("[", "{")) else actual
-        exp_obj = json.loads(norm_exp) if isinstance(norm_exp, str) and norm_exp.startswith(("[", "{")) else expected_str
+    # Empty list / null equivalence (e.g. empty linked list or empty tree)
+    if norm_act in ("null", "None", "[]") and norm_exp in ("null", "None", "[]"):
+        return True, "Passed"
 
+    # Boolean equivalence
+    if norm_act in ("true", "True") and norm_exp in ("true", "True"):
+        return True, "Passed"
+    if norm_act in ("false", "False") and norm_exp in ("false", "False"):
+        return True, "Passed"
+
+    # Float comparison with tolerance
+    try:
+        f_act = float(norm_act)
+        f_exp = float(norm_exp)
+        if abs(f_act - f_exp) < 1e-4:
+            return True, "Passed"
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        act_obj = json.loads(norm_act) if isinstance(norm_act, str) and norm_act.startswith(("[", "{", '"')) else actual
+        exp_obj = json.loads(norm_exp) if isinstance(norm_exp, str) and norm_exp.startswith(("[", "{", '"')) else expected_str
+
+        # If both are lists
         if isinstance(act_obj, list) and isinstance(exp_obj, list):
             # Two sum: indices order [0, 1] vs [1, 0]
             if problem_id == "two-sum" and len(act_obj) == 2 and len(exp_obj) == 2:
@@ -270,11 +281,11 @@ def compare_actual_expected(actual: Any, expected_str: str, problem_id: str) -> 
                 else:
                     return False, f"The returned indices {norm_act} do not equal expected {norm_exp}."
 
-            # Top K / 3Sum: sorted comparison
-            if problem_id in ("top-k-frequent-elements", "3sum"):
+            # Top K / 3Sum / Unordered list problems
+            if problem_id in ("top-k-frequent-elements", "3sum", "kth-largest-element-in-an-array", "find-all-anagrams-in-a-string"):
                 def sort_recursive(item):
                     if isinstance(item, list):
-                        return sorted([sort_recursive(x) for x in item])
+                        return sorted([sort_recursive(x) for x in item], key=lambda k: str(k))
                     return item
 
                 if sort_recursive(act_obj) == sort_recursive(exp_obj):
@@ -282,15 +293,25 @@ def compare_actual_expected(actual: Any, expected_str: str, problem_id: str) -> 
                 else:
                     return False, f"Expected {norm_exp} but received {norm_act}."
 
-            # Group anagrams: compare canonical groups
+            # Group anagrams: compare canonical groups (each group sorted, list of groups sorted)
             if problem_id == "group-anagrams":
                 def canon_groups(groups):
-                    return sorted(["|".join(sorted(g)) for g in groups])
+                    return sorted(["|".join(sorted(str(x) for x in g)) for g in groups])
 
                 if canon_groups(act_obj) == canon_groups(exp_obj):
                     return True, "Passed"
                 else:
                     return False, f"Expected grouped anagrams {norm_exp} but received {norm_act}."
+
+            # General nested list comparison where outer order doesn't matter (e.g. intervals)
+            if problem_id in ("merge-intervals",):
+                if sorted(act_obj) == sorted(exp_obj):
+                    return True, "Passed"
+
+        # General boolean comparison
+        if isinstance(act_obj, bool) and isinstance(exp_obj, bool):
+            if act_obj == exp_obj:
+                return True, "Passed"
     except Exception:
         pass
 
@@ -345,18 +366,41 @@ def execute_python_code(code: str, problem_id: str, test_cases: List[TestCaseIte
 
     # 2. Extract function name or Solution class
     func_name = None
-    for node in ast.walk(parsed_ast):
-        if isinstance(node, ast.FunctionDef):
-            if func_name is None or node.name != "__init__":
+    for node in getattr(parsed_ast, "body", []):
+        if isinstance(node, ast.ClassDef) and node.name == "Solution":
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and not item.name.startswith("_"):
+                    func_name = item.name
+                    break
+        elif isinstance(node, ast.FunctionDef) and not node.name.startswith("_") and func_name is None:
+            func_name = node.name
+
+    if func_name is None:
+        for node in ast.walk(parsed_ast):
+            if isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
                 func_name = node.name
+                break
 
     # 3. Create execution scope
+    from typing import (
+        List as TList,
+        Dict as TDict,
+        Optional as TOptional,
+        Tuple as TTuple,
+        Set as TSet,
+        Union as TUnion,
+        Any as TAny,
+    )
     stdout_capture = io.StringIO()
     exec_globals: Dict[str, Any] = {
         "__builtins__": __builtins__,
-        "List": List,
-        "Dict": Dict,
-        "Optional": Optional,
+        "List": TList,
+        "Dict": TDict,
+        "Optional": TOptional,
+        "Tuple": TTuple,
+        "Set": TSet,
+        "Union": TUnion,
+        "Any": TAny,
         "ListNode": ListNode,
         "TreeNode": TreeNode,
     }
@@ -440,11 +484,24 @@ def execute_python_code(code: str, problem_id: str, test_cases: List[TestCaseIte
     # Resolve callable function
     target_fn = None
     if "Solution" in exec_globals and isinstance(exec_globals["Solution"], type):
-        sol_instance = exec_globals["Solution"]()
-        if func_name and hasattr(sol_instance, func_name):
-            target_fn = getattr(sol_instance, func_name)
+        try:
+            sol_instance = exec_globals["Solution"]()
+            if func_name and hasattr(sol_instance, func_name) and callable(getattr(sol_instance, func_name)):
+                target_fn = getattr(sol_instance, func_name)
+            else:
+                methods = [getattr(sol_instance, m) for m in dir(sol_instance) if not m.startswith("_") and callable(getattr(sol_instance, m))]
+                if methods:
+                    target_fn = methods[0]
+        except Exception:
+            pass
     elif func_name and func_name in exec_globals and callable(exec_globals[func_name]):
         target_fn = exec_globals[func_name]
+
+    if not target_fn:
+        for k, v in exec_globals.items():
+            if not k.startswith("_") and k not in ("List", "Dict", "Optional", "Tuple", "Set", "Union", "Any", "ListNode", "TreeNode") and callable(v) and not isinstance(v, type):
+                target_fn = v
+                break
 
     if not target_fn:
         first_output = stdout_capture.getvalue().strip() or "No return value"
@@ -475,8 +532,19 @@ def execute_python_code(code: str, problem_id: str, test_cases: List[TestCaseIte
         args = parse_test_input_values(tc.input, problem_id)
         if problem_id == "reverse-linked-list" and args and isinstance(args[0], list):
             args = [list_to_linked_list(args[0])]
-        elif problem_id == "invert-binary-tree" and args and isinstance(args[0], list):
+        elif problem_id in ("invert-binary-tree", "maximum-depth-of-binary-tree", "binary-tree-inorder-traversal") and args and isinstance(args[0], list):
             args = [list_to_tree(args[0])]
+        elif problem_id == "lowest-common-ancestor-of-a-binary-search-tree" and len(args) >= 3 and isinstance(args[0], list):
+            root_tree = list_to_tree(args[0])
+            p_val = args[1]
+            q_val = args[2]
+            def find_tree_node(r, v):
+                if not r: return None
+                if r.val == v: return r
+                return find_tree_node(r.left, v) or find_tree_node(r.right, v)
+            p_node = find_tree_node(root_tree, p_val) or TreeNode(p_val)
+            q_node = find_tree_node(root_tree, q_val) or TreeNode(q_val)
+            args = [root_tree, p_node, q_node]
 
         try:
             old_stdout = sys.stdout
@@ -484,10 +552,13 @@ def execute_python_code(code: str, problem_id: str, test_cases: List[TestCaseIte
             actual_val = target_fn(*args)
             sys.stdout = old_stdout
 
-            if isinstance(actual_val, ListNode):
+            if isinstance(actual_val, ListNode) or (actual_val is None and problem_id in ("reverse-linked-list", "merge-two-sorted-lists")):
                 actual_val = linked_list_to_list(actual_val)
-            elif isinstance(actual_val, TreeNode):
-                actual_val = tree_to_list(actual_val)
+            elif isinstance(actual_val, TreeNode) or (actual_val is None and problem_id in ("invert-binary-tree", "maximum-depth-of-binary-tree", "binary-tree-inorder-traversal")):
+                if problem_id == "lowest-common-ancestor-of-a-binary-search-tree":
+                    actual_val = actual_val.val if actual_val else None
+                else:
+                    actual_val = tree_to_list(actual_val)
 
             passed, reason = compare_actual_expected(actual_val, tc.expectedOutput, problem_id)
             test_results.append(
@@ -557,97 +628,154 @@ def execute_javascript_code(code: str, problem_id: str, test_cases: List[TestCas
     clean_code = re.sub(r'\)\s*:\s*[a-zA-Z0-9_<>[\]|\s]+\s*\{', ') {', clean_code)
 
     js_runner = f"""
-    const testCases = {json.dumps([tc.model_dump() for tc in test_cases])};
-    const problemId = {json.dumps(problem_id)};
-    
-    function normalize(v) {{
-      if (v === undefined || v === null) return "null";
-      if (typeof v === "boolean") return v ? "true" : "false";
-      if (typeof v === "number") return String(v);
-      if (Array.isArray(v)) return JSON.stringify(v);
-      if (typeof v === "object") return JSON.stringify(v);
-      return String(v);
+    function ListNode(val, next) {{
+        this.val = (val === undefined ? 0 : val);
+        this.next = (next === undefined ? null : next);
     }}
-    
+    function TreeNode(val, left, right) {{
+        this.val = (val === undefined ? 0 : val);
+        this.left = (left === undefined ? null : left);
+        this.right = (right === undefined ? null : right);
+    }}
+    function arrayToList(arr) {{
+        if (!arr || arr.length === 0) return null;
+        const head = new ListNode(arr[0]);
+        let curr = head;
+        for (let i = 1; i < arr.length; i++) {{
+            curr.next = new ListNode(arr[i]);
+            curr = curr.next;
+        }}
+        return head;
+    }}
+    function listToArray(head) {{
+        const res = [];
+        let curr = head;
+        while (curr) {{
+            res.push(curr.val);
+            curr = curr.next;
+        }}
+        return res;
+    }}
+    function arrayToTree(arr) {{
+        if (!arr || arr.length === 0 || arr[0] === null) return null;
+        const root = new TreeNode(arr[0]);
+        const queue = [root];
+        let i = 1;
+        while (queue.length > 0 && i < arr.length) {{
+            const node = queue.shift();
+            if (node) {{
+                if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {{
+                    node.left = new TreeNode(arr[i]);
+                    queue.push(node.left);
+                }} else {{
+                    node.left = null;
+                }}
+                i++;
+                if (i < arr.length && arr[i] !== null && arr[i] !== undefined) {{
+                    node.right = new TreeNode(arr[i]);
+                    queue.push(node.right);
+                }} else {{
+                    node.right = null;
+                }}
+                i++;
+            }}
+        }}
+        return root;
+    }}
+    function treeToArray(root) {{
+        if (!root) return [];
+        const res = [];
+        const queue = [root];
+        while (queue.length > 0) {{
+            const node = queue.shift();
+            if (node) {{
+                res.push(node.val);
+                queue.push(node.left);
+                queue.push(node.right);
+            }} else {{
+                res.push(null);
+            }}
+        }}
+        while (res.length > 0 && res[res.length - 1] === null) {{
+            res.pop();
+        }}
+        return res;
+    }}
+
+    function serializeVal(v) {{
+        if (v === undefined || v === null) return "null";
+        if (typeof v === "boolean") return v ? "true" : "false";
+        if (typeof v === "number") return String(v);
+        if (v instanceof ListNode) return JSON.stringify(listToArray(v));
+        if (v instanceof TreeNode) return JSON.stringify(treeToArray(v));
+        if (Array.isArray(v)) return JSON.stringify(v);
+        if (typeof v === "object") return JSON.stringify(v);
+        return String(v);
+    }}
+
     // User Code
     {clean_code}
-    
-    // Find callable
+
+    const testInputs = {json.dumps([tc.input for tc in test_cases])};
+    const problemId = {json.dumps(problem_id)};
+
     let targetFn = null;
     try {{
-      if (typeof Solution === "function") {{
-        const s = new Solution();
-        const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(s)).filter(m => m !== "constructor");
-        if (methods.length > 0 && typeof s[methods[0]] === "function") {{
-          targetFn = s[methods[0]].bind(s);
-        }}
-      }}
-    }} catch(e) {{}}
-    
-    if (!targetFn) {{
-      const fnMatches = [...{json.dumps(code)}.matchAll(/(?:function|const|let|var|def)\\s+([a-zA-Z0-9_]+)/g)];
-      for (const m of fnMatches) {{
-        try {{
-          const fn = eval(m[1]);
-          if (typeof fn === "function" && m[1] !== "normalize") {{
-            targetFn = fn;
-            break;
-          }}
-        }} catch(e) {{}}
-      }}
-    }}
-    
-    const results = [];
-    for (const tc of testCases) {{
-      try {{
-        let args = [];
-        const input = tc.input.trim();
-        const parts = input.split(/,\\s*(?=[a-zA-Z_][a-zA-Z0-9_]*\\s*=)/);
-        for (const p of parts) {{
-          const eq = p.indexOf("=");
-          const val = eq >= 0 ? p.substring(eq + 1).trim() : p.trim();
-          try {{ args.push(JSON.parse(val)); }} catch(e) {{ args.push(val); }}
-        }}
-        
-        const actual = targetFn ? targetFn(...args) : undefined;
-        const normAct = normalize(actual);
-        const normExp = normalize(tc.expectedOutput);
-        let passed = normAct === normExp;
-        let reason = passed ? "Passed" : `Expected ${{normExp}} but received ${{normAct}}.`;
-        
-        if (!passed && Array.isArray(actual)) {{
-          try {{
-            const expArr = JSON.parse(tc.expectedOutput);
-            if (Array.isArray(expArr) && problemId === "two-sum" && actual.length === 2) {{
-              if ((actual[0] === expArr[0] && actual[1] === expArr[1]) || (actual[0] === expArr[1] && actual[1] === expArr[0])) {{
-                passed = true;
-                reason = "Passed";
-              }}
+        if (typeof Solution === "function") {{
+            const s = new Solution();
+            const methods = Object.getOwnPropertyNames(Object.getPrototypeOf(s)).filter(m => m !== "constructor");
+            if (methods.length > 0 && typeof s[methods[0]] === "function") {{
+                targetFn = s[methods[0]].bind(s);
             }}
-          }} catch(e) {{}}
         }}
-        
-        results.push({{
-          input: tc.input,
-          expected: tc.expectedOutput,
-          actual: normAct,
-          passed: passed,
-          reason: reason,
-          isHidden: tc.isHidden
-        }});
-      }} catch(err) {{
-        results.push({{
-          input: tc.input,
-          expected: tc.expectedOutput,
-          actual: "RuntimeError: " + err.message,
-          passed: false,
-          reason: "Runtime Error: " + err.message,
-          isHidden: tc.isHidden
-        }});
-      }}
+    }} catch(e) {{}}
+
+    if (!targetFn) {{
+        const fnMatches = [...{json.dumps(code)}.matchAll(/(?:function|const|let|var|def)\\s+([a-zA-Z0-9_]+)/g)];
+        for (const m of fnMatches) {{
+            try {{
+                const fn = eval(m[1]);
+                if (typeof fn === "function" && !["ListNode", "TreeNode", "arrayToList", "listToArray", "arrayToTree", "treeToArray", "serializeVal"].includes(m[1])) {{
+                    targetFn = fn;
+                    break;
+                }}
+            }} catch(e) {{}}
+        }}
     }}
-    
-    console.log(JSON.stringify(results));
+
+    for (let t = 0; t < testInputs.length; t++) {{
+        const inputStr = testInputs[t].trim();
+        try {{
+            let args = [];
+            const parts = inputStr.split(/,\\s*(?=[a-zA-Z_][a-zA-Z0-9_]*\\s*=)/);
+            for (const p of parts) {{
+                const eq = p.indexOf("=");
+                const valStr = eq >= 0 ? p.substring(eq + 1).trim() : p.trim();
+                try {{
+                    let safeJson = valStr.replace(/'/g, '"').replace(/\\bTrue\\b/g, 'true').replace(/\\bFalse\\b/g, 'false').replace(/\\bNone\\b/g, 'null');
+                    args.push(JSON.parse(safeJson));
+                }} catch(e) {{
+                    args.push(valStr.replace(/^["']|["']$/g, ''));
+                }}
+            }}
+
+            if (problemId === "reverse-linked-list" && args.length > 0 && Array.isArray(args[0])) {{
+                args[0] = arrayToList(args[0]);
+            }} else if (["invert-binary-tree", "maximum-depth-of-binary-tree", "binary-tree-inorder-traversal"].includes(problemId) && args.length > 0 && Array.isArray(args[0])) {{
+                args[0] = arrayToTree(args[0]);
+            }}
+
+            if (!targetFn) {{
+                console.log("RUNTIME_ERR::No solution function found");
+                continue;
+            }}
+
+            const res = targetFn(...args);
+            console.log("RESULT::" + serializeVal(res));
+        }} catch(err) {{
+            console.log("RUNTIME_ERR::" + (err.message || String(err)));
+        }}
+    }}
     """
 
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
@@ -684,15 +812,51 @@ def execute_javascript_code(code: str, problem_id: str, test_cases: List[TestCas
                 "consoleOutput": err,
             }
 
-        out_json = json.loads(proc.stdout.strip())
-        passed_count = sum(1 for t in out_json if t["passed"])
-        has_runtime = any("RuntimeError:" in str(t["actual"]) for t in out_json)
-        all_passed = passed_count == len(out_json)
+        lines = proc.stdout.strip().split("\n")
+        test_results = []
+        has_runtime = False
+
+        for idx, tc in enumerate(test_cases):
+            line = lines[idx] if idx < len(lines) else "RUNTIME_ERR::No output produced"
+            if line.startswith("RESULT::"):
+                act_str = line.replace("RESULT::", "").strip()
+                passed, reason = compare_actual_expected(act_str, tc.expectedOutput, problem_id)
+                test_results.append({
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": act_str,
+                    "passed": passed,
+                    "reason": reason,
+                    "isHidden": tc.isHidden,
+                })
+            elif line.startswith("RUNTIME_ERR::"):
+                has_runtime = True
+                err_msg = line.replace("RUNTIME_ERR::", "").strip()
+                test_results.append({
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": f"RuntimeError: {err_msg}",
+                    "passed": False,
+                    "reason": f"Runtime Error: {err_msg}",
+                    "isHidden": tc.isHidden,
+                })
+            else:
+                test_results.append({
+                    "input": tc.input,
+                    "expected": tc.expectedOutput,
+                    "actual": line,
+                    "passed": False,
+                    "reason": "Execution failure",
+                    "isHidden": tc.isHidden,
+                })
+
+        passed_count = sum(1 for t in test_results if t["passed"])
+        all_passed = passed_count == len(test_results)
 
         return {
             "status": "Accepted" if all_passed else ("Runtime Error" if has_runtime else "Wrong Answer"),
             "runtime": 25,
-            "testCaseResults": out_json,
+            "testCaseResults": test_results,
             "consoleOutput": "All test cases passed." if all_passed else "Test cases failed.",
         }
     except subprocess.TimeoutExpired:
@@ -750,6 +914,27 @@ import java.util.*;
 import java.io.*;
 import java.lang.reflect.*;
 
+class ListNode {{
+    public int val;
+    public ListNode next;
+    public ListNode() {{}}
+    public ListNode(int val) {{ this.val = val; }}
+    public ListNode(int val, ListNode next) {{ this.val = val; this.next = next; }}
+}}
+
+class TreeNode {{
+    public int val;
+    public TreeNode left;
+    public TreeNode right;
+    public TreeNode() {{}}
+    public TreeNode(int val) {{ this.val = val; }}
+    public TreeNode(int val, TreeNode left, TreeNode right) {{
+        this.val = val;
+        this.left = left;
+        this.right = right;
+    }}
+}}
+
 {code}
 
 public class Main {{
@@ -762,6 +947,53 @@ public class Main {{
             for (int i = 0; i < arr.length; i++) {{
                 sb.append(arr[i]);
                 if (i < arr.length - 1) sb.append(",");
+            }}
+            sb.append("]");
+            return sb.toString();
+        }}
+        if (obj instanceof int[][]) {{
+            int[][] mat = (int[][]) obj;
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < mat.length; i++) {{
+                sb.append(serialize(mat[i]));
+                if (i < mat.length - 1) sb.append(",");
+            }}
+            sb.append("]");
+            return sb.toString();
+        }}
+        if (obj instanceof ListNode) {{
+            ListNode curr = (ListNode) obj;
+            StringBuilder sb = new StringBuilder("[");
+            while (curr != null) {{
+                sb.append(curr.val);
+                if (curr.next != null) sb.append(",");
+                curr = curr.next;
+            }}
+            sb.append("]");
+            return sb.toString();
+        }}
+        if (obj instanceof TreeNode) {{
+            TreeNode root = (TreeNode) obj;
+            List<String> items = new ArrayList<>();
+            Queue<TreeNode> q = new LinkedList<>();
+            q.add(root);
+            while (!q.isEmpty()) {{
+                TreeNode n = q.poll();
+                if (n != null) {{
+                    items.add(String.valueOf(n.val));
+                    q.add(n.left);
+                    q.add(n.right);
+                }} else {{
+                    items.add("null");
+                }}
+            }}
+            while (!items.isEmpty() && items.get(items.size() - 1).equals("null")) {{
+                items.remove(items.size() - 1);
+            }}
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < items.size(); i++) {{
+                sb.append(items.get(i));
+                if (i < items.size() - 1) sb.append(",");
             }}
             sb.append("]");
             return sb.toString();
@@ -800,6 +1032,33 @@ public class Main {{
             for (int i = 0; i < parts.length; i++) arr[i] = Integer.parseInt(parts[i]);
             return arr;
         }}
+        if (targetType == int[][].class) {{
+            if (str.startsWith("[") && str.endsWith("]")) str = str.substring(1, str.length() - 1).trim();
+            if (str.isEmpty()) return new int[0][0];
+            String[] rows = str.split("\\\\],\\\\s*\\\\[");
+            int[][] mat = new int[rows.length][];
+            for (int i = 0; i < rows.length; i++) {{
+                String rowClean = rows[i].replaceAll("[\\\\[\\\\]\\\\s]", "");
+                if (rowClean.isEmpty()) {{ mat[i] = new int[0]; continue; }}
+                String[] p = rowClean.split(",");
+                mat[i] = new int[p.length];
+                for (int j = 0; j < p.length; j++) mat[i][j] = Integer.parseInt(p[j]);
+            }}
+            return mat;
+        }}
+        if (targetType == char[][].class) {{
+            if (str.startsWith("[") && str.endsWith("]")) str = str.substring(1, str.length() - 1).trim();
+            if (str.isEmpty()) return new char[0][0];
+            String[] rows = str.split("\\\\],\\\\s*\\\\[");
+            char[][] mat = new char[rows.length][];
+            for (int i = 0; i < rows.length; i++) {{
+                String rowClean = rows[i].replaceAll("[\\\\[\\\\]\\\\s\\"']", "");
+                String[] p = rowClean.split(",");
+                mat[i] = new char[p.length];
+                for (int j = 0; j < p.length; j++) mat[i][j] = p[j].charAt(0);
+            }}
+            return mat;
+        }}
         if (targetType == String[].class) {{
             String s = str.replaceAll("[\\\\[\\\\]]", "").trim();
             if (s.isEmpty()) return new String[0];
@@ -807,6 +1066,43 @@ public class Main {{
             String[] arr = new String[parts.length];
             for (int i = 0; i < parts.length; i++) arr[i] = parts[i].replaceAll("^[\\"']|[\\"']$", "");
             return arr;
+        }}
+        if (targetType == ListNode.class) {{
+            int[] arr = (int[]) parseArg(str, int[].class);
+            if (arr.length == 0) return null;
+            ListNode head = new ListNode(arr[0]);
+            ListNode curr = head;
+            for (int i = 1; i < arr.length; i++) {{
+                curr.next = new ListNode(arr[i]);
+                curr = curr.next;
+            }}
+            return head;
+        }}
+        if (targetType == TreeNode.class) {{
+            String s = str.replaceAll("[\\\\[\\\\]\\\\s]", "");
+            if (s.isEmpty()) return null;
+            String[] parts = s.split(",");
+            if (parts.length == 0 || parts[0].equals("null")) return null;
+            TreeNode root = new TreeNode(Integer.parseInt(parts[0]));
+            Queue<TreeNode> q = new LinkedList<>();
+            q.add(root);
+            int idx = 1;
+            while (!q.isEmpty() && idx < parts.length) {{
+                TreeNode curr = q.poll();
+                if (curr != null) {{
+                    if (idx < parts.length && !parts[idx].equals("null")) {{
+                        curr.left = new TreeNode(Integer.parseInt(parts[idx]));
+                        q.add(curr.left);
+                    }}
+                    idx++;
+                    if (idx < parts.length && !parts[idx].equals("null")) {{
+                        curr.right = new TreeNode(Integer.parseInt(parts[idx]));
+                        q.add(curr.right);
+                    }}
+                    idx++;
+                }}
+            }}
+            return root;
         }}
         return str;
     }}
@@ -819,14 +1115,14 @@ public class Main {{
             Solution sol = new Solution();
             Method targetMethod = null;
             for (Method m : Solution.class.getDeclaredMethods()) {{
-                if (!Modifier.isStatic(m.getModifiers()) || m.getName().equals("main")) {{
+                if (!Modifier.isStatic(m.getModifiers()) && !m.getName().equals("main")) {{
                     targetMethod = m;
                     break;
                 }}
             }}
             
             if (targetMethod == null) {{
-                System.out.println("ERROR: No solution method found");
+                System.out.println("FATAL_ERR::No solution method found in Solution class");
                 return;
             }}
             
@@ -850,6 +1146,8 @@ public class Main {{
                 }} catch (InvocationTargetException ite) {{
                     Throwable cause = ite.getCause() != null ? ite.getCause() : ite;
                     System.out.println("RUNTIME_ERR::" + cause.getClass().getSimpleName() + ": " + cause.getMessage());
+                }} catch (Exception ie) {{
+                    System.out.println("RUNTIME_ERR::" + ie.getClass().getSimpleName() + ": " + ie.getMessage());
                 }}
             }}
         }} catch (Exception e) {{
@@ -969,7 +1267,7 @@ public class Main {{
 
 
 def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem], is_c: bool = False) -> Dict[str, Any]:
-    """Compiles and executes C/C++ code using gcc/g++."""
+    """Compiles and executes C/C++ code using gcc/g++ with dynamic universal harness."""
     compiler = "gcc" if is_c else "g++"
     if not shutil.which(compiler):
         msg = f"{compiler.upper()} compiler is not available on this system."
@@ -1001,25 +1299,281 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
     try:
         with open(src_file, "w", encoding="utf-8") as f:
             if not is_c:
-                f.write("#include <iostream>\n#include <vector>\n#include <string>\n#include <unordered_map>\n#include <unordered_set>\n#include <algorithm>\n#include <sstream>\nusing namespace std;\n\n")
-            else:
-                f.write("#include <stdio.h>\n#include <stdlib.h>\n#include <stdbool.h>\n#include <string.h>\n\n")
-            
-            f.write(code)
+                f.write("""
+#include <iostream>
+#include <vector>
+#include <string>
+#include <sstream>
+#include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
+#include <queue>
+#include <stack>
+#include <cmath>
 
-            # Generate C++ test runner main
-            if not is_c and problem_id == "two-sum":
+using namespace std;
+
+struct ListNode {
+    int val;
+    ListNode *next;
+    ListNode() : val(0), next(nullptr) {}
+    ListNode(int x) : val(x), next(nullptr) {}
+    ListNode(int x, ListNode *next) : val(x), next(next) {}
+};
+
+struct TreeNode {
+    int val;
+    TreeNode *left;
+    TreeNode *right;
+    TreeNode() : val(0), left(nullptr), right(nullptr) {}
+    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+    TreeNode(int x, TreeNode *left, TreeNode *right) : val(x), left(left), right(right) {}
+};
+
+inline string serialize(bool b) { return b ? "true" : "false"; }
+inline string serialize(int x) { return to_string(x); }
+inline string serialize(long long x) { return to_string(x); }
+inline string serialize(double x) { return to_string(x); }
+inline string serialize(const string& s) { return "\\"" + s + "\\""; }
+
+template<typename T>
+string serialize(const vector<T>& vec) {
+    string res = "[";
+    for (size_t i = 0; i < vec.size(); i++) {
+        res += serialize(vec[i]);
+        if (i + 1 < vec.size()) res += ",";
+    }
+    res += "]";
+    return res;
+}
+
+inline string serialize(ListNode* head) {
+    string res = "[";
+    ListNode* curr = head;
+    while (curr) {
+        res += to_string(curr->val);
+        if (curr->next) res += ",";
+        curr = curr->next;
+    }
+    res += "]";
+    return res;
+}
+
+inline string serialize(TreeNode* root) {
+    if (!root) return "[]";
+    string res = "[";
+    queue<TreeNode*> q;
+    q.push(root);
+    vector<string> items;
+    while (!q.empty()) {
+        TreeNode* n = q.front();
+        q.pop();
+        if (n) {
+            items.push_back(to_string(n->val));
+            q.push(n->left);
+            q.push(n->right);
+        } else {
+            items.push_back("null");
+        }
+    }
+    while (!items.empty() && items.back() == "null") items.pop_back();
+    for (size_t i = 0; i < items.size(); i++) {
+        res += items[i];
+        if (i + 1 < items.size()) res += ",";
+    }
+    res += "]";
+    return res;
+}
+
+ListNode* buildList(const vector<int>& arr) {
+    if (arr.empty()) return nullptr;
+    ListNode* head = new ListNode(arr[0]);
+    ListNode* curr = head;
+    for (size_t i = 1; i < arr.size(); i++) {
+        curr->next = new ListNode(arr[i]);
+        curr = curr->next;
+    }
+    return head;
+}
+
+TreeNode* buildTree(const vector<string>& arr) {
+    if (arr.empty() || arr[0] == "null") return nullptr;
+    TreeNode* root = new TreeNode(stoi(arr[0]));
+    queue<TreeNode*> q;
+    q.push(root);
+    size_t idx = 1;
+    while (!q.empty() && idx < arr.size()) {
+        TreeNode* curr = q.front();
+        q.pop();
+        if (curr) {
+            if (idx < arr.size() && arr[idx] != "null") {
+                curr->left = new TreeNode(stoi(arr[idx]));
+                q.push(curr->left);
+            }
+            idx++;
+            if (idx < arr.size() && arr[idx] != "null") {
+                curr->right = new TreeNode(stoi(arr[idx]));
+                q.push(curr->right);
+            }
+            idx++;
+        }
+    }
+    return root;
+}
+""")
+            else:
+                f.write("""
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+
+struct ListNode {
+    int val;
+    struct ListNode *next;
+};
+""")
+
+            f.write("\n" + code + "\n")
+
+            # Generate Universal C++ Harness
+            if not is_c and "int main(" not in code:
                 f.write("\nint main() {\n    Solution sol;\n")
                 for i, tc in enumerate(test_cases):
                     args = parse_test_input_values(tc.input, problem_id)
-                    nums_arr = args[0] if len(args) > 0 and isinstance(args[0], list) else []
-                    target_val = args[1] if len(args) > 1 else 0
-                    nums_init = "{" + ", ".join(map(str, nums_arr)) + "}"
-                    f.write(f"    {{\n        vector<int> nums = {nums_init};\n")
-                    f.write(f"        vector<int> res = sol.twoSum(nums, {target_val});\n")
-                    f.write('        cout << "RESULT::[";\n')
-                    f.write('        for (size_t k = 0; k < res.size(); k++) cout << res[k] << (k + 1 < res.size() ? "," : "");\n')
-                    f.write('        cout << "]" << endl;\n    }\n')
+                    f.write(f"    // Test Case {i+1}\n    {{\n")
+                    if problem_id == "two-sum":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        target = args[1] if len(args) > 1 else 0
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write(f"        int target = {target};\n")
+                        f.write('        auto res = sol.twoSum(nums, target);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "contains-duplicate":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write('        auto res = sol.containsDuplicate(nums);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "valid-anagram":
+                        s_str = args[0] if len(args) > 0 else ""
+                        t_str = args[1] if len(args) > 1 else ""
+                        f.write(f'        string s = "{s_str}";\n')
+                        f.write(f'        string t = "{t_str}";\n')
+                        f.write('        auto res = sol.isAnagram(s, t);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "valid-parentheses":
+                        s_str = args[0] if len(args) > 0 else ""
+                        f.write(f'        string s = "{s_str}";\n')
+                        f.write('        auto res = sol.isValid(s);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "valid-palindrome":
+                        s_str = args[0] if len(args) > 0 else ""
+                        f.write(f'        string s = {json.dumps(s_str)};\n')
+                        f.write('        auto res = sol.isPalindrome(s);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "reverse-linked-list":
+                        vals = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f"        vector<int> arr = {{{','.join(map(str, vals))}}};\n")
+                        f.write('        ListNode* head = buildList(arr);\n')
+                        f.write('        auto res = sol.reverseList(head);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "invert-binary-tree":
+                        vals = [str(x) if x is not None else "null" for x in (args[0] if len(args) > 0 and isinstance(args[0], list) else [])]
+                        f.write(f'        vector<string> arr = {{{",".join(f"{json.dumps(v)}" for v in vals)}}};\n')
+                        f.write('        TreeNode* root = buildTree(arr);\n')
+                        f.write('        auto res = sol.invertTree(root);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "maximum-depth-of-binary-tree":
+                        vals = [str(x) if x is not None else "null" for x in (args[0] if len(args) > 0 and isinstance(args[0], list) else [])]
+                        f.write(f'        vector<string> arr = {{{",".join(f"{json.dumps(v)}" for v in vals)}}};\n')
+                        f.write('        TreeNode* root = buildTree(arr);\n')
+                        f.write('        auto res = sol.maxDepth(root);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "binary-tree-inorder-traversal":
+                        vals = [str(x) if x is not None else "null" for x in (args[0] if len(args) > 0 and isinstance(args[0], list) else [])]
+                        f.write(f'        vector<string> arr = {{{",".join(f"{json.dumps(v)}" for v in vals)}}};\n')
+                        f.write('        TreeNode* root = buildTree(arr);\n')
+                        f.write('        auto res = sol.inorderTraversal(root);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "3sum":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write('        auto res = sol.threeSum(nums);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "group-anagrams":
+                        strs = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f'        vector<string> strs = {{{",".join(json.dumps(s) for s in strs)}}};\n')
+                        f.write('        auto res = sol.groupAnagrams(strs);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "top-k-frequent-elements":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        k_val = args[1] if len(args) > 1 else 1
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write(f"        int k = {k_val};\n")
+                        f.write('        auto res = sol.topKFrequent(nums, k);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "product-of-array-except-self":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write('        auto res = sol.productExceptSelf(nums);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "container-with-most-water":
+                        height = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f"        vector<int> height = {{{','.join(map(str, height))}}};\n")
+                        f.write('        auto res = sol.maxArea(height);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "longest-substring-without-repeating-characters":
+                        s_str = args[0] if len(args) > 0 else ""
+                        f.write(f'        string s = {json.dumps(s_str)};\n')
+                        f.write('        auto res = sol.lengthOfLongestSubstring(s);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "climbing-stairs":
+                        n_val = args[0] if len(args) > 0 else 1
+                        f.write(f"        int n = {n_val};\n")
+                        f.write('        auto res = sol.climbStairs(n);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "coin-change":
+                        coins = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        amount = args[1] if len(args) > 1 else 0
+                        f.write(f"        vector<int> coins = {{{','.join(map(str, coins))}}};\n")
+                        f.write(f"        int amount = {amount};\n")
+                        f.write('        auto res = sol.coinChange(coins, amount);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "merge-intervals":
+                        intervals = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write('        vector<vector<int>> intervals = {\n')
+                        for inter in intervals:
+                            f.write(f'            {{{inter[0]},{inter[1]}}},\n')
+                        f.write('        };\n')
+                        f.write('        auto res = sol.merge(intervals);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "best-time-to-buy-and-sell-stock":
+                        prices = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f"        vector<int> prices = {{{','.join(map(str, prices))}}};\n")
+                        f.write('        auto res = sol.maxProfit(prices);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "maximum-subarray":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write('        auto res = sol.maxSubArray(nums);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "search-in-rotated-sorted-array":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        target = args[1] if len(args) > 1 else 0
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write(f"        int target = {target};\n")
+                        f.write('        auto res = sol.search(nums, target);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    elif problem_id == "kth-largest-element-in-an-array":
+                        nums = args[0] if len(args) > 0 and isinstance(args[0], list) else []
+                        k_val = args[1] if len(args) > 1 else 1
+                        f.write(f"        vector<int> nums = {{{','.join(map(str, nums))}}};\n")
+                        f.write(f"        int k = {k_val};\n")
+                        f.write('        auto res = sol.findKthLargest(nums, k);\n')
+                        f.write('        cout << "RESULT::" << serialize(res) << endl;\n')
+                    else:
+                        f.write('        cout << "RESULT::[]" << endl;\n')
+                    f.write("    }\n")
                 f.write("    return 0;\n}\n")
             elif "int main(" not in code:
                 f.write("\nint main() { return 0; }\n")
@@ -1053,16 +1607,35 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
                 "consoleOutput": err,
             }
 
-        start_time = time.perf_counter()
-        run_proc = subprocess.run(
-            [exe_file],
-            cwd=temp_dir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=5,
-        )
-        duration_ms = max(15, int((time.perf_counter() - start_time) * 1000))
+        try:
+            start_time = time.perf_counter()
+            run_proc = subprocess.run(
+                [exe_file],
+                cwd=temp_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=5,
+            )
+            duration_ms = max(15, int((time.perf_counter() - start_time) * 1000))
+        except (PermissionError, OSError) as os_err:
+            return {
+                "status": "Runtime Error",
+                "message": f"Execution Environment Restriction: {str(os_err)}",
+                "runtime": 0,
+                "testCaseResults": [
+                    {
+                        "input": tc.input,
+                        "expected": tc.expectedOutput,
+                        "actual": f"Execution Restricted: {str(os_err)}",
+                        "passed": False,
+                        "reason": f"OS Security Policy blocked binary execution: {str(os_err)}",
+                        "isHidden": tc.isHidden,
+                    }
+                    for tc in test_cases
+                ],
+                "consoleOutput": f"Execution Error: {str(os_err)}",
+            }
 
         if run_proc.returncode != 0:
             return {
@@ -1080,13 +1653,15 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
                     }
                     for tc in test_cases
                 ],
-                "consoleOutput": run_proc.stderr or f"Process exited with code {run_proc.returncode}",
+                "consoleOutput": run_proc.stderr.strip() or f"Process exited with code {run_proc.returncode}",
             }
 
         lines = run_proc.stdout.strip().split("\n")
         test_results = []
+        has_runtime = False
+
         for idx, tc in enumerate(test_cases):
-            line = lines[idx] if idx < len(lines) else ""
+            line = lines[idx] if idx < len(lines) else "RUNTIME_ERR::No output produced"
             if line.startswith("RESULT::"):
                 act_str = line.replace("RESULT::", "").strip()
                 passed, reason = compare_actual_expected(act_str, tc.expectedOutput, problem_id)
@@ -1099,6 +1674,7 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
                     "isHidden": tc.isHidden,
                 })
             elif line.startswith("RUNTIME_ERR::"):
+                has_runtime = True
                 err_msg = line.replace("RUNTIME_ERR::", "").strip()
                 test_results.append({
                     "input": tc.input,
@@ -1112,9 +1688,9 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
                 test_results.append({
                     "input": tc.input,
                     "expected": tc.expectedOutput,
-                    "actual": line if line else "No output produced",
+                    "actual": line,
                     "passed": False,
-                    "reason": "Execution did not produce expected output",
+                    "reason": "Execution failure",
                     "isHidden": tc.isHidden,
                 })
 
@@ -1122,15 +1698,15 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
         all_passed = passed_count == len(test_results)
 
         return {
-            "status": "Accepted" if all_passed else "Wrong Answer",
+            "status": "Accepted" if all_passed else ("Runtime Error" if has_runtime else "Wrong Answer"),
             "runtime": duration_ms,
             "testCaseResults": test_results,
-            "consoleOutput": f"{compiler.upper()} binary executed." if all_passed else "Test cases failed.",
+            "consoleOutput": "All C++ test cases compiled and verified." if all_passed else "Test verification failed.",
         }
     except subprocess.TimeoutExpired:
         return {
             "status": "Time Limit Exceeded",
-            "message": "Time Limit Exceeded during compilation or execution.",
+            "message": "Time Limit Exceeded during C++ execution.",
             "runtime": 5000,
             "testCaseResults": [],
             "consoleOutput": "Time Limit Exceeded",
@@ -1148,32 +1724,39 @@ def execute_cpp_code(code: str, problem_id: str, test_cases: List[TestCaseItem],
 
 
 def execute_sql_code(code: str, problem_id: str, test_cases: List[TestCaseItem]) -> Dict[str, Any]:
-    """Executes SQL queries against in-memory SQLite schema."""
+    """Executes SQL queries against in-memory SQLite database."""
     conn = sqlite3.connect(":memory:")
     cursor = conn.cursor()
 
     try:
+        # Seed Schema and Tables based on problem_id
         if problem_id == "combine-two-tables":
-            cursor.execute("CREATE TABLE Person (personId INT, lastName VARCHAR, firstName VARCHAR);")
-            cursor.execute("CREATE TABLE Address (addressId INT, personId INT, city VARCHAR, state VARCHAR);")
+            cursor.execute("CREATE TABLE Person (personId INTEGER PRIMARY KEY, lastName TEXT, firstName TEXT);")
+            cursor.execute("CREATE TABLE Address (addressId INTEGER PRIMARY KEY, personId INTEGER, city TEXT, state TEXT);")
             cursor.execute("INSERT INTO Person VALUES (1, 'Wang', 'Allen'), (2, 'Alice', 'Bob');")
             cursor.execute("INSERT INTO Address VALUES (1, 2, 'New York City', 'New York');")
-        elif problem_id == "second-highest-salary":
-            cursor.execute("CREATE TABLE Employee (id INT, salary INT);")
-            cursor.execute("INSERT INTO Employee VALUES (1, 100), (2, 200), (3, 300);")
         elif problem_id == "duplicate-emails":
-            cursor.execute("CREATE TABLE Person (id INT, email VARCHAR);")
+            cursor.execute("CREATE TABLE Person (id INTEGER PRIMARY KEY, email TEXT);")
             cursor.execute("INSERT INTO Person VALUES (1, 'a@b.com'), (2, 'c@d.com'), (3, 'a@b.com');")
+        elif problem_id == "second-highest-salary":
+            cursor.execute("CREATE TABLE Employee (id INTEGER PRIMARY KEY, salary INTEGER);")
+            cursor.execute("INSERT INTO Employee VALUES (1, 100), (2, 200), (3, 300);")
         elif problem_id == "customers-who-never-order":
-            cursor.execute("CREATE TABLE Customers (id INT, name VARCHAR);")
-            cursor.execute("CREATE TABLE Orders (id INT, customerId INT);")
+            cursor.execute("CREATE TABLE Customers (id INTEGER PRIMARY KEY, name TEXT);")
+            cursor.execute("CREATE TABLE Orders (id INTEGER PRIMARY KEY, customerId INTEGER);")
             cursor.execute("INSERT INTO Customers VALUES (1, 'Joe'), (2, 'Henry'), (3, 'Sam'), (4, 'Max');")
             cursor.execute("INSERT INTO Orders VALUES (1, 3), (2, 1);")
         elif problem_id == "department-highest-salary":
-            cursor.execute("CREATE TABLE Department (id INT, name VARCHAR);")
-            cursor.execute("CREATE TABLE Employee (id INT, name VARCHAR, salary INT, departmentId INT);")
+            cursor.execute("CREATE TABLE Employee (id INTEGER PRIMARY KEY, name TEXT, salary INTEGER, departmentId INTEGER);")
+            cursor.execute("CREATE TABLE Department (id INTEGER PRIMARY KEY, name TEXT);")
             cursor.execute("INSERT INTO Department VALUES (1, 'IT'), (2, 'Sales');")
-            cursor.execute("INSERT INTO Employee VALUES (1, 'Joe', 85000, 1), (2, 'Henry', 80000, 2), (3, 'Sam', 60000, 2), (4, 'Max', 90000, 1);")
+            cursor.execute("INSERT INTO Employee VALUES (1, 'Joe', 85000, 1), (2, 'Henry', 80000, 2), (3, 'Sam', 60000, 2), (4, 'Max', 90000, 1), (5, 'Janet', 69000, 1);")
+        else:
+            cursor.execute("CREATE TABLE Person (personId INTEGER PRIMARY KEY, lastName TEXT, firstName TEXT);")
+            cursor.execute("CREATE TABLE Address (addressId INTEGER PRIMARY KEY, personId INTEGER, city TEXT, state TEXT);")
+            cursor.execute("INSERT INTO Person VALUES (1, 'Wang', 'Allen'), (2, 'Alice', 'Bob');")
+            cursor.execute("INSERT INTO Address VALUES (1, 2, 'New York City', 'New York');")
+
         conn.commit()
 
         start_time = time.perf_counter()
@@ -1307,7 +1890,7 @@ public class PlaceMentorRunner {{
     }}
 
     public static object ParseArg(string str, Type targetType) {{
-        str = str.Trim();
+        str = str.trim();
         if (targetType == typeof(int)) return int.Parse(str);
         if (targetType == typeof(long)) return long.Parse(str);
         if (targetType == typeof(double)) return double.Parse(str);
@@ -1382,11 +1965,11 @@ public class PlaceMentorRunner {{
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=10,
+            timeout=8,
         )
 
         if comp_proc.returncode != 0:
-            err = comp_proc.stdout.replace(temp_dir, "").strip() or comp_proc.stderr.strip()
+            err = comp_proc.stderr.replace(temp_dir, "").strip() or comp_proc.stdout.replace(temp_dir, "").strip()
             return {
                 "status": "Compilation Error",
                 "message": err,
@@ -1502,7 +2085,7 @@ def is_starter_or_empty(code: str) -> bool:
     if not cleaned_lines:
         return True
 
-    # If code only contains class/function signatures, includes, imports, brackets, or pass
+    # If code only contains signatures, headers, braces, or pass
     if all(
         l.startswith((
             "class ", "def ", "public ", "static ", "void ", "import ", "from ",
@@ -1528,8 +2111,8 @@ async def execute_code(
     lang = req.language.lower()
     problem_id = req.problemId
     is_submit = bool(req.isSubmit or req.mode == "submit")
-    # Security: derive authenticated user_id from verified JWT session
-    user_id = current_user.get("id") if (current_user and current_user.get("id")) else (req.userId or "default-user")
+    # Security: derive authenticated user_id from verified JWT session ONLY (never trust client userId)
+    user_id = current_user.get("id") if (current_user and current_user.get("id")) else None
 
     # In submit mode, load the complete test suite (visible + hidden) from backend registry
     if is_submit:
@@ -1640,8 +2223,8 @@ async def execute_code(
                 r_copy["actual"] = "[Passed]"
         sanitized_results.append(r_copy)
 
-    # 6. If Submit mode, persist to MongoDB
-    if is_submit:
+    # 6. If Submit mode, persist to MongoDB for authenticated user
+    if is_submit and user_id and user_id not in ("anonymous", "default-user"):
         try:
             await record_user_submission(
                 user_id=user_id,

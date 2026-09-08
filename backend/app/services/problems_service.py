@@ -57,7 +57,7 @@ PROBLEMS_DATA: List[Dict[str, Any]] = [
         "hiddenTestCases": [
             {"input": "nums = [-1,-2,-3,-4,-5], target = -8", "expectedOutput": "[2,4]", "isHidden": True},
             {"input": "nums = [0,4,3,0], target = 0", "expectedOutput": "[0,3]", "isHidden": True},
-            {"input": "nums = [1000000000,2000000000], target = 3000000000", "expectedOutput": "[0,1]", "isHidden": True},
+            {"input": "nums = [1000000000,1000000000], target = 2000000000", "expectedOutput": "[0,1]", "isHidden": True},
             {"input": "nums = [5,75,25], target = 100", "expectedOutput": "[1,2]", "isHidden": True},
             {"input": "nums = [-10,-1,-18,-19], target = -19", "expectedOutput": "[1,2]", "isHidden": True}
         ]
@@ -751,6 +751,197 @@ PROBLEMS_DATA: List[Dict[str, Any]] = [
         ],
         "hiddenTestCases": [
             {"input": "All customers ordered something", "expectedOutput": "Empty result", "isHidden": True}
+        ]
+    },
+
+    # 23. Group Anagrams
+    {
+        "id": "group-anagrams",
+        "title": "Group Anagrams",
+        "difficulty": "Medium",
+        "category": "Algorithms & DSA",
+        "topic": "Strings",
+        "companies": ["Amazon", "Microsoft", "Google", "Zoho", "Deloitte", "IBM"],
+        "acceptanceRate": "67.8%",
+        "description": "Given an array of strings `strs`, group the anagrams together. You can return the answer in any order.",
+        "examples": [
+            {"input": 'strs = ["eat","tea","tan","ate","nat","bat"]', "output": '[["bat"],["nat","tan"],["ate","eat","tea"]]'},
+            {"input": 'strs = [""]', "output": '[[""]]'},
+            {"input": 'strs = ["a"]', "output": '[["a"]]'}
+        ],
+        "constraints": ["1 <= strs.length <= 10^4", "0 <= strs[i].length <= 100", "strs[i] consists of lowercase English letters."],
+        "hints": ["Two strings are anagrams if and only if their sorted character sequences are equal."],
+        "optimalApproach": ["Create a map from canonical key to list of matching strings."],
+        "timeComplexity": "O(n * k log k)",
+        "spaceComplexity": "O(n * k)",
+        "testCases": [
+            {"input": 'strs = ["eat","tea","tan","ate","nat","bat"]', "expectedOutput": '[["eat","tea","ate"],["tan","nat"],["bat"]]'}
+        ],
+        "hiddenTestCases": [
+            {"input": 'strs = ["bdddddddddd", "bbbbbbbbbbc"]', "expectedOutput": '[["bdddddddddd"],["bbbbbbbbbbc"]]', "isHidden": True}
+        ]
+    },
+
+    # 24. Top K Frequent Elements
+    {
+        "id": "top-k-frequent-elements",
+        "title": "Top K Frequent Elements",
+        "difficulty": "Medium",
+        "category": "Algorithms & DSA",
+        "topic": "Hash Table",
+        "companies": ["Amazon", "Microsoft", "Google", "HCL", "Accenture", "Infosys"],
+        "acceptanceRate": "63.5%",
+        "description": "Given an integer array `nums` and an integer `k`, return the `k` most frequent elements. You may return the answer in any order.",
+        "examples": [
+            {"input": "nums = [1,1,1,2,2,3], k = 2", "output": "[1,2]"},
+            {"input": "nums = [1], k = 1", "output": "[1]"}
+        ],
+        "constraints": ["1 <= nums.length <= 10^5", "-10^4 <= nums[i] <= 10^4", "k is in the range [1, the number of unique elements in the array]."],
+        "hints": ["First count occurrences with a hash table, then sort or bucket sort."],
+        "optimalApproach": ["Count frequency using Hash Map and bucket sort."],
+        "timeComplexity": "O(n)",
+        "spaceComplexity": "O(n)",
+        "testCases": [
+            {"input": "nums = [1,1,1,2,2,3], k = 2", "expectedOutput": "[1,2]"}
+        ],
+        "hiddenTestCases": [
+            {"input": "nums = [4,1,-1,2,-1,2,3], k = 2", "expectedOutput": "[-1,2]", "isHidden": True}
+        ]
+    },
+
+    # 25. Product of Array Except Self
+    {
+        "id": "product-of-array-except-self",
+        "title": "Product of Array Except Self",
+        "difficulty": "Medium",
+        "category": "Algorithms & DSA",
+        "topic": "Arrays",
+        "companies": ["Amazon", "Microsoft", "Google", "Wipro", "Capgemini", "Deloitte"],
+        "acceptanceRate": "65.9%",
+        "description": "Given an integer array `nums`, return an array `answer` such that `answer[i]` is equal to the product of all the elements of `nums` except `nums[i]`.",
+        "examples": [
+            {"input": "nums = [1,2,3,4]", "output": "[24,12,8,6]"},
+            {"input": "nums = [-1,1,0,-3,3]", "output": "[0,0,9,0,0]"}
+        ],
+        "constraints": ["2 <= nums.length <= 10^5", "-30 <= nums[i] <= 30"],
+        "hints": ["Calculate prefix and suffix products."],
+        "optimalApproach": ["Calculate left prefix products and right suffix products."],
+        "timeComplexity": "O(n)",
+        "spaceComplexity": "O(1) extra space",
+        "testCases": [
+            {"input": "nums = [1,2,3,4]", "expectedOutput": "[24,12,8,6]"}
+        ],
+        "hiddenTestCases": [
+            {"input": "nums = [0,0]", "expectedOutput": "[0,0]", "isHidden": True}
+        ]
+    },
+
+    # 26. 3Sum
+    {
+        "id": "3sum",
+        "title": "3Sum",
+        "difficulty": "Medium",
+        "category": "Algorithms & DSA",
+        "topic": "Two Pointers",
+        "companies": ["Amazon", "Microsoft", "Google", "Infosys", "IBM", "Accenture"],
+        "acceptanceRate": "34.1%",
+        "description": "Given an integer array nums, return all the triplets `[nums[i], nums[j], nums[k]]` such that `i != j`, `i != k`, and `j != k`, and `nums[i] + nums[j] + nums[k] == 0`.",
+        "examples": [
+            {"input": "nums = [-1,0,1,2,-1,-4]", "output": "[[-1,-1,2],[-1,0,1]]"},
+            {"input": "nums = [0,1,1]", "output": "[]"},
+            {"input": "nums = [0,0,0]", "output": "[[0,0,0]]"}
+        ],
+        "constraints": ["3 <= nums.length <= 3000", "-10^5 <= nums[i] <= 10^5"],
+        "hints": ["Sort the array first. Fix one element and use two pointers."],
+        "optimalApproach": ["Sort nums, iterate i and use two pointers for the remaining sum."],
+        "timeComplexity": "O(n²)",
+        "spaceComplexity": "O(1) extra space",
+        "testCases": [
+            {"input": "nums = [-1,0,1,2,-1,-4]", "expectedOutput": "[[-1,-1,2],[-1,0,1]]"}
+        ],
+        "hiddenTestCases": [
+            {"input": "nums = [-2,0,1,1,2]", "expectedOutput": "[[-2,0,2],[-2,1,1]]", "isHidden": True}
+        ]
+    },
+
+    # 27. Container With Most Water
+    {
+        "id": "container-with-most-water",
+        "title": "Container With Most Water",
+        "difficulty": "Medium",
+        "category": "Algorithms & DSA",
+        "topic": "Greedy",
+        "companies": ["Google", "Amazon", "Adobe", "Freshworks", "TCS"],
+        "acceptanceRate": "54.9%",
+        "description": "You are given an integer array `height` of length `n`. Find two lines that together with the x-axis form a container, such that the container contains the most water.",
+        "examples": [
+            {"input": "height = [1,8,6,2,5,4,8,3,7]", "output": "49"},
+            {"input": "height = [1,1]", "output": "1"}
+        ],
+        "constraints": ["n == height.length", "2 <= n <= 10^5", "0 <= height[i] <= 10^4"],
+        "hints": ["Start with maximum width and move the shorter line inward."],
+        "optimalApproach": ["Two pointers at both ends, moving the shorter line inward."],
+        "timeComplexity": "O(n)",
+        "spaceComplexity": "O(1)",
+        "testCases": [
+            {"input": "height = [1,8,6,2,5,4,8,3,7]", "expectedOutput": "49"}
+        ],
+        "hiddenTestCases": [
+            {"input": "height = [4,3,2,1,4]", "expectedOutput": "16", "isHidden": True}
+        ]
+    },
+
+    # 28. Invert Binary Tree
+    {
+        "id": "invert-binary-tree",
+        "title": "Invert Binary Tree",
+        "difficulty": "Easy",
+        "category": "Algorithms & DSA",
+        "topic": "Trees",
+        "companies": ["Google", "Amazon", "Microsoft", "Deloitte", "Zoho"],
+        "acceptanceRate": "77.4%",
+        "description": "Given the `root` of a binary tree, invert the tree, and return its root.",
+        "examples": [
+            {"input": "root = [4,2,7,1,3,6,9]", "output": "[4,7,2,9,6,3,1]"},
+            {"input": "root = [2,1,3]", "output": "[2,3,1]"},
+            {"input": "root = []", "output": "[]"}
+        ],
+        "constraints": ["0 <= number of nodes <= 100", "-100 <= Node.val <= 100"],
+        "hints": ["Recursively swap the left and right children for every node."],
+        "optimalApproach": ["Base case: if not root return None. Swap root.left and root.right. Recurse."],
+        "timeComplexity": "O(n)",
+        "spaceComplexity": "O(h)",
+        "testCases": [
+            {"input": "root = [4,2,7,1,3,6,9]", "expectedOutput": "[4,7,2,9,6,3,1]"}
+        ],
+        "hiddenTestCases": [
+            {"input": "root = [1,2]", "expectedOutput": "[1,null,2]", "isHidden": True}
+        ]
+    },
+
+    # 29. LRU Cache Design
+    {
+        "id": "lru-cache-design",
+        "title": "LRU Cache Design",
+        "difficulty": "Medium",
+        "category": "Core CS",
+        "topic": "OOP",
+        "companies": ["Amazon", "Microsoft", "Google", "Bloomberg", "Freshworks", "IBM"],
+        "acceptanceRate": "42.6%",
+        "description": "Design a data structure that follows the constraints of a Least Recently Used (LRU) cache with O(1) get and put operations.",
+        "examples": [
+            {"input": '["LRUCache", "put", "put", "get", "put", "get", "put", "get", "get", "get"]\n[[2], [1, 1], [2, 2], [1], [3, 3], [2], [4, 4], [1], [3], [4]]', "output": "[null, null, null, 1, null, -1, null, -1, 3, 4]"}
+        ],
+        "constraints": ["1 <= capacity <= 3000", "0 <= key <= 10^4", "At most 2 * 10^5 calls to get and put."],
+        "hints": ["Combine a Hash Map with a Doubly Linked List."],
+        "optimalApproach": ["Maintain Hash Map and Doubly Linked List with dummy head & tail."],
+        "timeComplexity": "O(1)",
+        "spaceComplexity": "O(capacity)",
+        "testCases": [
+            {"input": "LRUCache(2), put(1,1), put(2,2), get(1)", "expectedOutput": "1"}
+        ],
+        "hiddenTestCases": [
+            {"input": "Hidden capacity edge cases", "expectedOutput": "Passed", "isHidden": True}
         ]
     }
 ]

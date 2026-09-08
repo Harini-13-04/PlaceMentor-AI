@@ -31,31 +31,33 @@ export default function Practice() {
   const [problems, setProblems] = useState<Problem[]>(PROBLEMS_DATASET);
 
   // Fetch real problem catalog and user status from backend
-  useEffect(() => {
-    const fetchBackendProblems = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/problems`, {
-          headers: getAuthHeaders(true),
-        });
+  const fetchBackendProblems = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/problems`, {
+        headers: getAuthHeaders(true),
+      });
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.problems && data.problems.length > 0) {
-            // Merge with local dataset to ensure starter codes & metadata are intact
-            const backendMap = new Map(data.problems.map((p: any) => [p.id, p]));
-            setProblems((prev) =>
-              prev.map((p) => {
-                const b = backendMap.get(p.id);
-                return b ? { ...p, status: b.status || p.status, attemptsCount: b.attemptsCount || 0 } : p;
-              })
-            );
-          }
+      if (res.ok) {
+        const data = await res.json();
+        if (data.problems && data.problems.length > 0) {
+          // Merge with local dataset to ensure starter codes & metadata are intact
+          const backendMap = new Map(data.problems.map((p: any) => [p.id, p]));
+          setProblems((prev) =>
+            prev.map((p) => {
+              const b = backendMap.get(p.id);
+              return b
+                ? { ...p, status: (b.status || "Not Started") as Problem["status"], attemptsCount: b.attemptsCount || 0 }
+                : { ...p, status: "Not Started" as Problem["status"], attemptsCount: 0 };
+            })
+          );
         }
-      } catch (err) {
-        console.warn("Using offline problem dataset:", err);
       }
-    };
+    } catch (err) {
+      console.warn("Using offline problem dataset:", err);
+    }
+  };
 
+  useEffect(() => {
     fetchBackendProblems();
   }, []);
   
@@ -70,8 +72,8 @@ export default function Practice() {
     }
   }, [urlProblemId]);
 
-  // Bookmarked problems set
-  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set(["two-sum"]));
+  // Bookmarked problems set - initialize empty for fresh user
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -203,7 +205,19 @@ export default function Practice() {
   const handleProblemSolved = (problemId: string) => {
     setProblems((prev) =>
       prev.map((p) =>
-        p.id === problemId ? { ...p, status: "Solved" as const, mastery: 100 } : p
+        p.id === problemId
+          ? { ...p, status: "Solved" as const, mastery: 100, attemptsCount: (p.attemptsCount || 0) + 1 }
+          : p
+      )
+    );
+  };
+
+  const handleProblemAttempted = (problemId: string) => {
+    setProblems((prev) =>
+      prev.map((p) =>
+        p.id === problemId && p.status !== "Solved"
+          ? { ...p, status: "Attempted" as const, attemptsCount: (p.attemptsCount || 0) + 1 }
+          : p
       )
     );
   };
@@ -216,6 +230,7 @@ export default function Practice() {
   const handleBackToList = () => {
     setSelectedProblemId(null);
     setSearchParams({});
+    fetchBackendProblems();
     if (routeProblemId) {
       navigate("/practice");
     }
@@ -240,6 +255,7 @@ export default function Practice() {
         onBackToList={handleBackToList}
         onSelectProblem={handleSelectProblem}
         onProblemSolved={handleProblemSolved}
+        onProblemAttempted={handleProblemAttempted}
       />
     );
   }
