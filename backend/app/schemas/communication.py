@@ -93,14 +93,25 @@ class GDRoomJoinRequest(BaseModel):
     room_id: str = Field(..., description="Target room code/ID")
 
 
+class GDActivityLog(BaseModel):
+    id: str
+    type: str = "room_event"
+    message: str
+    user_id: Optional[str] = None
+    display_name: Optional[str] = None
+    timestamp: str
+
+
 class GDRoomResponse(BaseModel):
     room_id: str
+    room_code: Optional[str] = None
     topic: str
     status: Literal["waiting", "active", "evaluating", "ended"] = "waiting"
     host_user_id: str
     max_participants: int = 6
     min_participants: int = 2
     created_at: str
+    updated_at: Optional[str] = None
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
     duration_seconds: int = 300
@@ -111,6 +122,7 @@ class GDRoomResponse(BaseModel):
     current_speaker_name: Optional[str] = None
     next_speaker_id: Optional[str] = None
     is_host: bool = False
+    activity_logs: List[GDActivityLog] = Field(default_factory=list)
     evaluation_summary: Optional[dict] = None
     winning_team: Optional[str] = None
 

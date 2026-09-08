@@ -234,6 +234,7 @@ const App = () => (
               <Route path="/quiz" element={<Navigate to="/quizee" replace />} />
               <Route path="/readiness" element={<Navigate to="/placement-readiness" replace />} />
               <Route path="/copilot" element={<Navigate to="/practice" replace />} />
+              <Route path="/ai-mentor" element={<Navigate to="/practice" replace />} />
 
               {/* 404 Catch-All */}
               <Route path="*" element={<NotFound />} />

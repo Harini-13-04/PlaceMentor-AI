@@ -10,17 +10,16 @@ export default defineConfig(() => ({
     "/api": {
       target: "http://localhost:8000",
       changeOrigin: true,
+      ws: true,
     },
     "/uploads": {
       target: "http://localhost:8000",
       changeOrigin: true,
     },
   },
-  hmr: {
-    overlay: false,
-    port: 9999,
-    clientPort: 9999,
-  },
+    hmr: {
+      overlay: false,
+    },
   watch: {
     ignored: [
       "**/node_modules/**",

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api";
+import { getAuthToken } from "@/config";
 import {
   Mic,
   MicOff,
@@ -612,14 +613,25 @@ export default function Communication() {
     last_turn_at?: string | null;
   };
 
+  type GDActivityLog = {
+    id: string;
+    type: string;
+    message: string;
+    user_id?: string | null;
+    display_name?: string | null;
+    timestamp: string;
+  };
+
   type GDRoomState = {
     room_id: string;
+    room_code?: string;
     topic: string;
     status: "waiting" | "active" | "evaluating" | "ended";
     host_user_id: string;
     max_participants: number;
     min_participants: number;
     created_at: string;
+    updated_at?: string;
     started_at?: string | null;
     ended_at?: string | null;
     duration_seconds: number;
@@ -630,6 +642,7 @@ export default function Communication() {
     current_speaker_name?: string | null;
     next_speaker_id?: string | null;
     is_host?: boolean;
+    activity_logs?: GDActivityLog[];
     evaluation_summary?: any;
     winning_team?: string | null;
   };
@@ -717,7 +730,12 @@ export default function Communication() {
       apiRequest<GDRoomState>(`/api/communication/gd/rooms/${savedCode}`)
         .then((room) => {
           if (room && room.status !== "ended") {
-            setActiveRoomData(room);
+            const currentUserId = user?.id;
+            const updatedRoom = {
+              ...room,
+              is_host: room.host_user_id === currentUserId,
+            };
+            setActiveRoomData(updatedRoom);
             setGdRoomCode(room.room_id);
             setGdStep(room.status === "active" ? "live" : "waiting");
             connectGDWebSocket(room.room_id);
@@ -727,7 +745,7 @@ export default function Communication() {
           sessionStorage.removeItem("active_gd_room_code");
         });
     }
-  }, [activeTab]);
+  }, [activeTab, user]);
 
   const handleFetchGdEvaluation = async () => {
     if (!gdRoomCode) return;
@@ -747,46 +765,124 @@ export default function Communication() {
   };
 
   const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<any>(null);
+  const heartbeatIntervalRef = useRef<any>(null);
+  const activeRoomIdRef = useRef<string | null>(null);
 
   const connectGDWebSocket = (roomId: string) => {
+    const cleanRoomId = roomId.trim().toUpperCase();
+    activeRoomIdRef.current = cleanRoomId;
+
     if (wsRef.current) {
-      wsRef.current.close();
-    }
-    const token = localStorage.getItem("token") || "demo-token";
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsHost = window.location.hostname === "localhost" ? "127.0.0.1:8000" : window.location.host;
-    const wsUrl = `${protocol}//${wsHost}/api/communication/gd/ws/${roomId}?token=${encodeURIComponent(token)}`;
-
-    const socket = new WebSocket(wsUrl);
-    wsRef.current = socket;
-
-    socket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "room_state" && data.room) {
-          setActiveRoomData(data.room);
-          if (data.room.status === "active") {
-            setGdStep("live");
-          } else if (data.room.status === "ended") {
-            setGdStep("feedback");
-          } else if (data.room.status === "waiting") {
-            setGdStep("waiting");
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing GD WebSocket payload:", e);
+      if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
+        return;
       }
-    };
+      try {
+        wsRef.current.close();
+      } catch (e) {}
+    }
 
-    socket.onerror = (err) => {
-      console.error("GD WebSocket error:", err);
-    };
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+
+    const token = getAuthToken() || localStorage.getItem("token") || "";
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    let wsHost = window.location.host;
+    if (window.location.port === "5173" || window.location.port === "3000") {
+      wsHost = `${window.location.hostname}:8000`;
+    }
+    const wsUrl = `${protocol}//${wsHost}/api/communication/gd/ws/${cleanRoomId}?token=${encodeURIComponent(token)}`;
+
+    try {
+      const socket = new WebSocket(wsUrl);
+      wsRef.current = socket;
+
+      socket.onopen = () => {
+        // Start 20s heartbeat
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "ping" }));
+          }
+        }, 20000);
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (
+            (data.type === "room_state" ||
+              data.type === "participant_joined" ||
+              data.type === "participant_left" ||
+              data.type === "session_started" ||
+              data.type === "session_ended" ||
+              data.type === "speaking_started" ||
+              data.type === "speaking_stopped" ||
+              data.type === "room_updated") &&
+            data.room
+          ) {
+            const currentUserId = user?.id;
+            const updatedRoom: GDRoomState = {
+              ...data.room,
+              is_host: data.room.host_user_id === currentUserId,
+            };
+            setActiveRoomData(updatedRoom);
+            if (updatedRoom.status === "active") {
+              setGdStep("live");
+            } else if (updatedRoom.status === "ended") {
+              setGdStep("feedback");
+            } else if (updatedRoom.status === "waiting") {
+              setGdStep("waiting");
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing GD WebSocket payload:", e);
+        }
+      };
+
+      socket.onclose = (event) => {
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+        // Auto-reconnect if session is still in progress and user hasn't explicitly left
+        if (activeRoomIdRef.current === cleanRoomId && sessionStorage.getItem("active_gd_room_code") === cleanRoomId) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (activeRoomIdRef.current === cleanRoomId) {
+              connectGDWebSocket(cleanRoomId);
+            }
+          }, 2000);
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.warn("GD WebSocket notice:", err);
+      };
+    } catch (err) {
+      console.error("Failed to initialize WebSocket:", err);
+    }
   };
 
   useEffect(() => {
     return () => {
+      activeRoomIdRef.current = null;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
+      }
       if (wsRef.current) {
-        wsRef.current.close();
+        try {
+          wsRef.current.close();
+        } catch (e) {}
         wsRef.current = null;
       }
     };
@@ -957,6 +1053,15 @@ export default function Communication() {
   };
 
   const handleLeaveGd = async () => {
+    activeRoomIdRef.current = null;
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
     if (gdRoomCode) {
       try {
         await apiRequest(`/api/communication/gd/rooms/${gdRoomCode}/leave`, {
@@ -967,11 +1072,14 @@ export default function Communication() {
       }
     }
     if (wsRef.current) {
-      wsRef.current.close();
+      try {
+        wsRef.current.close();
+      } catch (e) {}
       wsRef.current = null;
     }
     sessionStorage.removeItem("active_gd_room_code");
     setActiveRoomData(null);
+    setGdRoomCode("");
     setGdStep("lobby");
   };
 
@@ -2106,6 +2214,38 @@ export default function Communication() {
                     </div>
                   ))}
                 </div>
+
+                {/* Live Activity Logs Feed */}
+                <div className="pt-3 border-t border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider font-mono flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                      <span>Room Event Log</span>
+                    </h5>
+                    <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">Live</span>
+                  </div>
+
+                  <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                    {(!activeRoomData.activity_logs || activeRoomData.activity_logs.length === 0) ? (
+                      <p className="text-[11px] text-muted-foreground italic">No events recorded yet.</p>
+                    ) : (
+                      activeRoomData.activity_logs.slice().reverse().map((log) => {
+                        const timeStr = log.timestamp
+                          ? new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                          : "";
+                        return (
+                          <div key={log.id} className="flex items-center justify-between text-[11px] py-1 border-b border-border/30 last:border-0 gap-2">
+                            <span className="text-foreground flex items-center gap-1.5 truncate">
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                              <span>{log.message}</span>
+                            </span>
+                            <span className="text-[10px] font-mono text-muted-foreground shrink-0">{timeStr}</span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2289,6 +2429,34 @@ export default function Communication() {
                   </div>
                 </div>
               </div>
+
+              {/* Real-Time Arena Activity Feed */}
+              {activeRoomData.activity_logs && activeRoomData.activity_logs.length > 0 && (
+                <div className="p-3.5 rounded-xl border border-purple-500/20 bg-secondary/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3" /> Real-Time Discussion Feed
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-500 font-bold">● Active</span>
+                  </div>
+                  <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                    {activeRoomData.activity_logs.slice().reverse().map((log) => {
+                      const timeStr = log.timestamp
+                        ? new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+                        : "";
+                      return (
+                        <div key={log.id} className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5">
+                          <span className="text-foreground flex items-center gap-1.5 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" />
+                            <span>{log.message}</span>
+                          </span>
+                          <span className="text-[10px] font-mono shrink-0">{timeStr}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Action Buttons Footer */}
               <div className="flex items-center justify-between pt-4 border-t border-border gap-4">

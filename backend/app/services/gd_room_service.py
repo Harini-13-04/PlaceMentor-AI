@@ -31,6 +31,46 @@ class GDRoomManager:
         name = user.get("name") or user.get("full_name") or user.get("email", "User")
         return name
 
+    def _safe_room_dict(self, room: dict) -> dict:
+        """Return a copy of room dict safe for MongoDB serialization and WebSocket broadcasting."""
+        safe = {}
+        for k, v in room.items():
+            if k == "audio_segments":
+                # Omit raw audio_bytes from broadcast / MongoDB to avoid huge payloads
+                safe_segments = []
+                for seg in v:
+                    seg_copy = {sk: sv for sk, sv in seg.items() if sk != "audio_bytes"}
+                    safe_segments.append(seg_copy)
+                safe[k] = safe_segments
+            else:
+                safe[k] = v
+        return safe
+
+    def _add_activity_log(
+        self,
+        room: dict,
+        event_type: str,
+        message: str,
+        user_id: Optional[str] = None,
+        display_name: Optional[str] = None,
+    ) -> dict:
+        """Add structured real activity log to room state and trim to last 50 entries."""
+        if "activity_logs" not in room:
+            room["activity_logs"] = []
+
+        log_entry = {
+            "id": str(uuid.uuid4()),
+            "type": event_type,
+            "message": message,
+            "user_id": user_id,
+            "display_name": display_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        room["activity_logs"].append(log_entry)
+        if len(room["activity_logs"]) > 50:
+            room["activity_logs"] = room["activity_logs"][-50:]
+        return log_entry
+
     async def create_room(
         self,
         topic: str,
@@ -51,9 +91,10 @@ class GDRoomManager:
             room_id = generate_room_code()
 
         now_iso = datetime.now(timezone.utc).isoformat()
+        host_name = self._get_display_name(host_user)
         host_participant = {
             "user_id": host_id,
-            "display_name": self._get_display_name(host_user),
+            "display_name": host_name,
             "is_host": True,
             "is_connected": True,
             "joined_at": now_iso,
@@ -64,14 +105,25 @@ class GDRoomManager:
             "last_turn_at": None,
         }
 
+        initial_log = {
+            "id": str(uuid.uuid4()),
+            "type": "room_created",
+            "message": f"{host_name} created the discussion room",
+            "user_id": host_id,
+            "display_name": host_name,
+            "timestamp": now_iso,
+        }
+
         room_data = {
             "room_id": room_id,
+            "room_code": room_id,
             "topic": topic,
             "status": "waiting",
             "host_user_id": host_id,
             "max_participants": max_participants,
             "min_participants": MIN_GD_PARTICIPANTS,
             "created_at": now_iso,
+            "updated_at": now_iso,
             "started_at": None,
             "ended_at": None,
             "duration_seconds": DEFAULT_GD_DURATION_SECONDS,
@@ -82,6 +134,7 @@ class GDRoomManager:
             "current_speaker_name": None,
             "next_speaker_id": host_id,
             "turn_priority_queue": [host_id],
+            "activity_logs": [initial_log],
             "audio_segments": [],
             "evaluation_summary": None,
             "winning_team": None,
@@ -90,10 +143,9 @@ class GDRoomManager:
         self.active_rooms[room_id] = room_data
         self.active_connections[room_id] = {}
 
-        # Optionally persist to MongoDB
+        # Persist room to MongoDB
         try:
-            doc = room_data.copy()
-            # Omit non-serializable raw audio bytes if present
+            doc = self._safe_room_dict(room_data)
             await gd_rooms_collection.insert_one(doc)
         except Exception as e:
             logger.warning(f"Failed to persist initial room to MongoDB: {e}")
@@ -101,14 +153,21 @@ class GDRoomManager:
         return room_data
 
     async def get_room(self, room_id: str) -> dict:
-        room = self.active_rooms.get(room_id)
+        norm_code = room_id.strip().upper() if room_id else ""
+        room = self.active_rooms.get(norm_code) or self.active_rooms.get(room_id)
         if not room:
             # Fallback check MongoDB
-            doc = await gd_rooms_collection.find_one({"room_id": room_id}, {"_id": 0})
+            doc = await gd_rooms_collection.find_one(
+                {"$or": [{"room_id": norm_code}, {"room_code": norm_code}, {"room_id": room_id}]},
+                {"_id": 0},
+            )
             if doc:
-                self.active_rooms[room_id] = doc
-                if room_id not in self.active_connections:
-                    self.active_connections[room_id] = {}
+                # Ensure activity_logs exists
+                if "activity_logs" not in doc:
+                    doc["activity_logs"] = []
+                self.active_rooms[doc["room_id"]] = doc
+                if doc["room_id"] not in self.active_connections:
+                    self.active_connections[doc["room_id"]] = {}
                 return doc
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -122,7 +181,11 @@ class GDRoomManager:
     async def _check_timer_expiration(self, room: dict):
         if room["status"] == "active" and room.get("discussion_ends_at"):
             now_dt = datetime.now(timezone.utc)
-            ends_dt = datetime.fromisoformat(room["discussion_ends_at"])
+            try:
+                ends_dt = datetime.fromisoformat(room["discussion_ends_at"])
+            except Exception:
+                ends_dt = now_dt
+
             if now_dt >= ends_dt:
                 # Timer expired! Release speaker lock & auto transition to ending/evaluating
                 if room.get("current_speaker_id"):
@@ -130,11 +193,36 @@ class GDRoomManager:
                         p["is_speaking"] = False
                     room["current_speaker_id"] = None
                     room["current_speaker_name"] = None
-                
+
                 room["status"] = "ended"
                 room["ended_at"] = now_dt.isoformat()
+                room["updated_at"] = now_dt.isoformat()
+                self._add_activity_log(
+                    room=room,
+                    event_type="session_ended",
+                    message="Discussion time expired (5 minutes completed)",
+                )
                 self.active_rooms[room["room_id"]] = room
-                await self.broadcast_room_state(room["room_id"])
+
+                try:
+                    await gd_rooms_collection.update_one(
+                        {"room_id": room["room_id"]},
+                        {
+                            "$set": {
+                                "status": "ended",
+                                "ended_at": room["ended_at"],
+                                "updated_at": room["updated_at"],
+                                "activity_logs": room.get("activity_logs", []),
+                                "current_speaker_id": None,
+                                "current_speaker_name": None,
+                                "participants": room["participants"],
+                            }
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to update expired timer in MongoDB: {e}")
+
+                await self.broadcast_room_state(room["room_id"], event_type="session_ended")
 
     async def join_room(self, room_id: str, user: dict) -> dict:
         room = await self.get_room(room_id)
@@ -145,46 +233,83 @@ class GDRoomManager:
                 detail="Authentication required",
             )
 
+        user_display_name = self._get_display_name(user)
+        now_iso = datetime.now(timezone.utc).isoformat()
+
         if room["status"] == "ended":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This Group Discussion session has already concluded",
             )
 
+        participants = room.get("participants", [])
+        existing = next((p for p in participants if p["user_id"] == user_id), None)
+
         if room["status"] == "active":
-            # Check if user is already a member rejoining
-            participants = room.get("participants", [])
-            existing = next((p for p in participants if p["user_id"] == user_id), None)
+            # Allow existing participant to reconnect
             if existing:
                 existing["is_connected"] = True
-                existing["display_name"] = self._get_display_name(user)
-                self.active_rooms[room_id] = room
-                await self.broadcast_room_state(room_id)
+                existing["display_name"] = user_display_name
+                room["updated_at"] = now_iso
+                self._add_activity_log(
+                    room=room,
+                    event_type="user_joined",
+                    message=f"{user_display_name} reconnected to the room",
+                    user_id=user_id,
+                    display_name=user_display_name,
+                )
+                self.active_rooms[room["room_id"]] = room
+
+                try:
+                    await gd_rooms_collection.update_one(
+                        {"room_id": room["room_id"]},
+                        {
+                            "$set": {
+                                "participants": room["participants"],
+                                "activity_logs": room.get("activity_logs", []),
+                                "updated_at": now_iso,
+                            }
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to persist rejoin in MongoDB: {e}")
+
+                await self.broadcast_room_state(
+                    room["room_id"],
+                    event_type="participant_joined",
+                    extra={"user_id": user_id, "display_name": user_display_name},
+                )
                 return room
+
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot join room after discussion has started",
             )
 
-        participants = room.get("participants", [])
-        existing = next((p for p in participants if p["user_id"] == user_id), None)
-
+        # Room status is "waiting"
         if existing:
             existing["is_connected"] = True
-            existing["display_name"] = self._get_display_name(user)
+            existing["display_name"] = user_display_name
+            self._add_activity_log(
+                room=room,
+                event_type="user_joined",
+                message=f"{user_display_name} reconnected to the room",
+                user_id=user_id,
+                display_name=user_display_name,
+            )
         else:
             if len(participants) >= room.get("max_participants", 6):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Room {room_id} is full (Maximum {room.get('max_participants', 6)} participants)",
+                    detail=f"Room {room['room_id']} is full (Maximum {room.get('max_participants', 6)} participants)",
                 )
 
             new_participant = {
                 "user_id": user_id,
-                "display_name": self._get_display_name(user),
+                "display_name": user_display_name,
                 "is_host": (user_id == room["host_user_id"]),
                 "is_connected": True,
-                "joined_at": datetime.now(timezone.utc).isoformat(),
+                "joined_at": now_iso,
                 "is_speaking": False,
                 "team": None,
                 "total_speaking_seconds": 0.0,
@@ -192,29 +317,64 @@ class GDRoomManager:
                 "last_turn_at": None,
             }
             participants.append(new_participant)
+            self._add_activity_log(
+                room=room,
+                event_type="user_joined",
+                message=f"{user_display_name} joined the room",
+                user_id=user_id,
+                display_name=user_display_name,
+            )
 
         room["participants"] = participants
+        room["updated_at"] = now_iso
+
         # Update priority queue
         queue = room.get("turn_priority_queue", [])
         if user_id not in queue:
             queue.append(user_id)
         room["turn_priority_queue"] = queue
 
-        self.active_rooms[room_id] = room
-        await self.broadcast_room_state(room_id)
+        self.active_rooms[room["room_id"]] = room
+
+        # Persist updated participants and activity logs to MongoDB
+        try:
+            await gd_rooms_collection.update_one(
+                {"room_id": room["room_id"]},
+                {
+                    "$set": {
+                        "participants": room["participants"],
+                        "turn_priority_queue": room["turn_priority_queue"],
+                        "activity_logs": room.get("activity_logs", []),
+                        "updated_at": now_iso,
+                    }
+                },
+                upsert=True,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to persist joined participant to MongoDB: {e}")
+
+        # Broadcast state update to all participants in this room
+        await self.broadcast_room_state(
+            room["room_id"],
+            event_type="participant_joined",
+            extra={"user_id": user_id, "display_name": user_display_name},
+        )
         return room
 
     async def leave_room(self, room_id: str, user_id: str) -> dict:
         room = await self.get_room(room_id)
         participants = room.get("participants", [])
+        leaving_participant = next((p for p in participants if p["user_id"] == user_id), None)
+        leaving_name = leaving_participant["display_name"] if leaving_participant else "Participant"
 
         # If user is currently speaking, release active speaking lock first
         if room.get("current_speaker_id") == user_id:
             room["current_speaker_id"] = None
             room["current_speaker_name"] = None
 
-        # Remove user from participants
+        # Remove user from participants list upon explicit leave
         room["participants"] = [p for p in participants if p["user_id"] != user_id]
+
         if "turn_priority_queue" in room:
             room["turn_priority_queue"] = [uid for uid in room["turn_priority_queue"] if uid != user_id]
 
@@ -227,8 +387,42 @@ class GDRoomManager:
             new_host["is_host"] = True
             room["host_user_id"] = new_host["user_id"]
 
-        self.active_rooms[room_id] = room
-        await self.broadcast_room_state(room_id)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        room["updated_at"] = now_iso
+        self._add_activity_log(
+            room=room,
+            event_type="user_left",
+            message=f"{leaving_name} left the room",
+            user_id=user_id,
+            display_name=leaving_name,
+        )
+
+        self.active_rooms[room["room_id"]] = room
+
+        # Update in MongoDB
+        try:
+            await gd_rooms_collection.update_one(
+                {"room_id": room["room_id"]},
+                {
+                    "$set": {
+                        "participants": room["participants"],
+                        "host_user_id": room["host_user_id"],
+                        "current_speaker_id": room["current_speaker_id"],
+                        "current_speaker_name": room["current_speaker_name"],
+                        "turn_priority_queue": room.get("turn_priority_queue", []),
+                        "activity_logs": room.get("activity_logs", []),
+                        "updated_at": now_iso,
+                    }
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update leave in MongoDB: {e}")
+
+        await self.broadcast_room_state(
+            room["room_id"],
+            event_type="participant_left",
+            extra={"user_id": user_id, "display_name": leaving_name},
+        )
         return room
 
     def _update_next_speaker(self, room: dict):
@@ -238,10 +432,6 @@ class GDRoomManager:
             room["next_speaker_id"] = None
             return
 
-        # Fair rotation sort key:
-        # 1. Turn count ascending
-        # 2. Total speaking seconds ascending
-        # 3. Last turn timestamp ascending (None/oldest first)
         def sort_key(p):
             t_count = p.get("turn_count", 0)
             s_sec = p.get("total_speaking_seconds", 0.0)
@@ -296,21 +486,33 @@ class GDRoomManager:
         # Server-authoritative 5-minute timer
         now_dt = datetime.now(timezone.utc)
         ends_dt = now_dt + timedelta(seconds=DEFAULT_GD_DURATION_SECONDS)
+        now_iso = now_dt.isoformat()
 
         room["status"] = "active"
         room["duration_seconds"] = DEFAULT_GD_DURATION_SECONDS
-        room["started_at"] = now_dt.isoformat()
+        room["started_at"] = now_iso
         room["discussion_ends_at"] = ends_dt.isoformat()
+        room["updated_at"] = now_iso
+
+        host_p = next((p for p in participants if p["user_id"] == user_id), None)
+        host_name = host_p["display_name"] if host_p else "Host"
+        self._add_activity_log(
+            room=room,
+            event_type="session_started",
+            message=f"Discussion started by host {host_name} (5:00 timer active)",
+            user_id=user_id,
+            display_name=host_name,
+        )
 
         # Initialize priority queue
         self._update_next_speaker(room)
 
-        self.active_rooms[room_id] = room
+        self.active_rooms[room["room_id"]] = room
 
         # Update in MongoDB
         try:
             await gd_rooms_collection.update_one(
-                {"room_id": room_id},
+                {"room_id": room["room_id"]},
                 {
                     "$set": {
                         "status": "active",
@@ -318,13 +520,16 @@ class GDRoomManager:
                         "discussion_ends_at": room["discussion_ends_at"],
                         "teams": room["teams"],
                         "participants": room["participants"],
+                        "turn_priority_queue": room["turn_priority_queue"],
+                        "activity_logs": room.get("activity_logs", []),
+                        "updated_at": now_iso,
                     }
                 },
             )
         except Exception as e:
             logger.warning(f"Failed to update room start in MongoDB: {e}")
 
-        await self.broadcast_room_state(room_id)
+        await self.broadcast_room_state(room["room_id"], event_type="session_started")
         return room
 
     async def start_speaking_turn(self, room_id: str, user_id: str) -> dict:
@@ -356,9 +561,36 @@ class GDRoomManager:
         participant["is_speaking"] = True
         room["current_speaker_id"] = user_id
         room["current_speaker_name"] = participant["display_name"]
+        now_iso = datetime.now(timezone.utc).isoformat()
+        room["updated_at"] = now_iso
 
-        self.active_rooms[room_id] = room
-        await self.broadcast_room_state(room_id)
+        self._add_activity_log(
+            room=room,
+            event_type="speaking_started",
+            message=f"{participant['display_name']} started speaking",
+            user_id=user_id,
+            display_name=participant["display_name"],
+        )
+
+        self.active_rooms[room["room_id"]] = room
+
+        try:
+            await gd_rooms_collection.update_one(
+                {"room_id": room["room_id"]},
+                {
+                    "$set": {
+                        "current_speaker_id": user_id,
+                        "current_speaker_name": participant["display_name"],
+                        "participants": room["participants"],
+                        "activity_logs": room.get("activity_logs", []),
+                        "updated_at": now_iso,
+                    }
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update speaking start in MongoDB: {e}")
+
+        await self.broadcast_room_state(room["room_id"], event_type="speaking_started")
         return room
 
     async def stop_speaking_turn(
@@ -386,7 +618,7 @@ class GDRoomManager:
         now_iso = datetime.now(timezone.utc).isoformat()
         participant["last_turn_at"] = now_iso
 
-        # Store audio segment metadata + raw audio bytes
+        # Store audio segment metadata + raw audio bytes in memory
         segment_id = turn_id or str(uuid.uuid4())
         audio_hash = hashlib.sha256(audio_bytes).hexdigest() if audio_bytes else ""
         segment_record = {
@@ -408,12 +640,46 @@ class GDRoomManager:
         # Release active speaker lock
         room["current_speaker_id"] = None
         room["current_speaker_name"] = None
+        room["updated_at"] = now_iso
 
         # Re-calculate fair rotation priority queue
         self._update_next_speaker(room)
 
-        self.active_rooms[room_id] = room
-        await self.broadcast_room_state(room_id)
+        self._add_activity_log(
+            room=room,
+            event_type="speaking_stopped",
+            message=f"{participant['display_name']} finished speaking ({round(safe_duration)}s)",
+            user_id=user_id,
+            display_name=participant["display_name"],
+        )
+
+        self.active_rooms[room["room_id"]] = room
+
+        # Update in MongoDB
+        try:
+            safe_segments = [
+                {k: v for k, v in seg.items() if k != "audio_bytes"}
+                for seg in room["audio_segments"]
+            ]
+            await gd_rooms_collection.update_one(
+                {"room_id": room["room_id"]},
+                {
+                    "$set": {
+                        "current_speaker_id": None,
+                        "current_speaker_name": None,
+                        "participants": room["participants"],
+                        "turn_priority_queue": room["turn_priority_queue"],
+                        "next_speaker_id": room["next_speaker_id"],
+                        "audio_segments": safe_segments,
+                        "activity_logs": room.get("activity_logs", []),
+                        "updated_at": now_iso,
+                    }
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update stop speaking turn in MongoDB: {e}")
+
+        await self.broadcast_room_state(room["room_id"], event_type="speaking_stopped")
         return room
 
     async def end_discussion(self, room_id: str, user_id: str, auto_timer: bool = False) -> dict:
@@ -430,41 +696,83 @@ class GDRoomManager:
         room["current_speaker_id"] = None
         room["current_speaker_name"] = None
 
+        now_iso = datetime.now(timezone.utc).isoformat()
         room["status"] = "ended"
-        room["ended_at"] = datetime.now(timezone.utc).isoformat()
-        self.active_rooms[room_id] = room
+        room["ended_at"] = now_iso
+        room["updated_at"] = now_iso
+
+        self._add_activity_log(
+            room=room,
+            event_type="session_ended",
+            message="Group Discussion session concluded",
+            user_id=user_id,
+        )
+
+        self.active_rooms[room["room_id"]] = room
 
         # Update in MongoDB
         try:
             await gd_rooms_collection.update_one(
-                {"room_id": room_id},
-                {"$set": {"status": "ended", "ended_at": room["ended_at"]}}
+                {"room_id": room["room_id"]},
+                {
+                    "$set": {
+                        "status": "ended",
+                        "ended_at": room["ended_at"],
+                        "current_speaker_id": None,
+                        "current_speaker_name": None,
+                        "participants": room["participants"],
+                        "activity_logs": room.get("activity_logs", []),
+                        "updated_at": now_iso,
+                    }
+                },
             )
         except Exception as e:
             logger.warning(f"Failed to update room end in MongoDB: {e}")
 
-        await self.broadcast_room_state(room_id)
+        await self.broadcast_room_state(room["room_id"], event_type="session_ended")
         return room
 
     async def connect_ws(self, room_id: str, user_id: str, websocket: WebSocket):
         await websocket.accept()
-        if room_id not in self.active_connections:
-            self.active_connections[room_id] = {}
-        self.active_connections[room_id][user_id] = websocket
+        norm_id = room_id.strip().upper()
+        if norm_id not in self.active_connections:
+            self.active_connections[norm_id] = {}
+        self.active_connections[norm_id][user_id] = websocket
 
         # Mark user as connected in room
-        room = self.active_rooms.get(room_id)
+        room = await self.get_room(norm_id)
         if room:
             for p in room.get("participants", []):
                 if p["user_id"] == user_id:
                     p["is_connected"] = True
-            await self.broadcast_room_state(room_id)
+
+            # Send immediate fresh room_state to connecting client
+            try:
+                await websocket.send_json({
+                    "type": "room_state",
+                    "room": self._safe_room_dict(room),
+                })
+            except Exception as e:
+                logger.debug(f"Failed to send initial WS room_state: {e}")
+
+            # Notify OTHER participants in this room that user connection status updated
+            safe_room = self._safe_room_dict(room)
+            for uid, ws in list(self.active_connections.get(norm_id, {}).items()):
+                if uid != user_id:
+                    try:
+                        await ws.send_json({
+                            "type": "room_updated",
+                            "room": safe_room,
+                        })
+                    except Exception as e:
+                        logger.debug(f"Failed to send WS message to user {uid}: {e}")
 
     async def disconnect_ws(self, room_id: str, user_id: str):
-        if room_id in self.active_connections:
-            self.active_connections[room_id].pop(user_id, None)
+        norm_id = room_id.strip().upper() if room_id else ""
+        if norm_id in self.active_connections:
+            self.active_connections[norm_id].pop(user_id, None)
 
-        room = self.active_rooms.get(room_id)
+        room = self.active_rooms.get(norm_id)
         if room:
             # If active speaker disconnected, release speaker lock automatically
             if room.get("current_speaker_id") == user_id:
@@ -477,26 +785,32 @@ class GDRoomManager:
                     p["is_speaking"] = False
 
             self._update_next_speaker(room)
-            await self.broadcast_room_state(room_id)
+            await self.broadcast_room_state(norm_id, event_type="room_updated")
 
     async def set_speaking_state(self, room_id: str, user_id: str, is_speaking: bool):
-        room = self.active_rooms.get(room_id)
+        norm_id = room_id.strip().upper() if room_id else ""
+        room = self.active_rooms.get(norm_id)
         if room:
             for p in room.get("participants", []):
                 if p["user_id"] == user_id:
                     p["is_speaking"] = is_speaking
-            await self.broadcast_room_state(room_id)
+            await self.broadcast_room_state(norm_id, event_type="speaking_update")
 
-    async def broadcast_room_state(self, room_id: str):
-        room = self.active_rooms.get(room_id)
+    async def broadcast_room_state(self, room_id: str, event_type: str = "room_state", extra: Optional[dict] = None):
+        norm_id = room_id.strip().upper() if room_id else ""
+        room = self.active_rooms.get(norm_id)
         if not room:
             return
 
-        connections = self.active_connections.get(room_id, {})
+        connections = self.active_connections.get(norm_id, {})
+        safe_room = self._safe_room_dict(room)
+
         payload = {
-            "type": "room_state",
-            "room": room,
+            "type": event_type,
+            "room": safe_room,
         }
+        if extra:
+            payload.update(extra)
 
         disconnected_users = []
         for uid, ws in list(connections.items()):
@@ -512,4 +826,3 @@ class GDRoomManager:
 
 # Global singleton instance
 gd_room_manager = GDRoomManager()
-

@@ -112,7 +112,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     };
 
     fetchStatusAndStats();
-  }, [user, location.pathname]);
+  }, [user?.id, location.pathname]);
 
 
   // Close mobile drawer on route change
@@ -138,7 +138,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const searchResults = [
     { title: "Two Sum", category: "Practice • Arrays", path: "/practice/two-sum" },
-    { title: "AI Placement Mentor & RAG", category: "AI Mentor • Live Coaching", path: "/ai-mentor" },
+    { title: "AI Placement Mentor & RAG", category: "AI Mentor • Live Coaching", path: "/practice" },
     { title: "Personalized Recommendations", category: "Recommendations • Action Items", path: "/recommendations" },
     { title: "Time & Work Shortcuts", category: "Aptitude • Quantitative", path: "/aptitude" },
     { title: "STAR Method Practice", category: "Communication • Behavioral", path: "/communication" },

@@ -397,6 +397,8 @@ async def gd_websocket_endpoint(
     WebSocket endpoint for real-time room state, participant synchronization, and local speaking indicators.
     Authenticated via JWT query parameter `token`.
     """
+    norm_room_id = room_id.strip().upper() if room_id else ""
+
     # Authenticate token
     user = None
     if token:
@@ -422,7 +424,7 @@ async def gd_websocket_endpoint(
     user_id = user["id"]
 
     try:
-        await gd_room_manager.connect_ws(room_id=room_id, user_id=user_id, websocket=websocket)
+        await gd_room_manager.connect_ws(room_id=norm_room_id, user_id=user_id, websocket=websocket)
         
         while True:
             data = await websocket.receive_json()
@@ -432,15 +434,15 @@ async def gd_websocket_endpoint(
                 await websocket.send_json({"type": "pong"})
             elif msg_type == "speaking":
                 is_speaking = bool(data.get("is_speaking", False))
-                await gd_room_manager.set_speaking_state(room_id, user_id, is_speaking)
+                await gd_room_manager.set_speaking_state(norm_room_id, user_id, is_speaking)
             elif msg_type == "leave":
-                await gd_room_manager.leave_room(room_id, user_id)
+                await gd_room_manager.leave_room(norm_room_id, user_id)
                 break
     except WebSocketDisconnect:
-        await gd_room_manager.disconnect_ws(room_id, user_id)
+        await gd_room_manager.disconnect_ws(norm_room_id, user_id)
     except Exception as e:
-        logger.error(f"WebSocket error in room {room_id}: {e}")
-        await gd_room_manager.disconnect_ws(room_id, user_id)
+        logger.error(f"WebSocket error in room {norm_room_id}: {e}")
+        await gd_room_manager.disconnect_ws(norm_room_id, user_id)
 
 
 @router.post("/gd/rooms/{room_id}/evaluate", response_model=GDEvaluationResponse, status_code=status.HTTP_200_OK)

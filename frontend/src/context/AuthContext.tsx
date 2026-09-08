@@ -204,22 +204,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: data.detail || "Google authentication failed" };
       }
 
-      const authenticatedUser: User = {
-        id: data.user?.id || `u-${Date.now()}`,
-        name: data.user?.name || data.user?.full_name || "Google User",
-        full_name: data.user?.full_name || data.user?.name,
-        email: data.user?.email || "",
-        avatar: data.user?.avatar || DEMO_AVATAR,
-        level: data.user?.level || 1,
-        xp: data.user?.xp || 100,
-        coins: data.user?.coins || 50,
-        department: data.user?.department || "Computer Science & Engineering",
-        college: data.user?.college || "Placement Candidate",
-        role: "SDE Aspirant",
-        gender: data.user?.gender || "",
-      };
+      const receivedToken = data.access_token || data.token;
+      if (!receivedToken) {
+        return { success: false, error: "Authentication failed: No access token received from server" };
+      }
 
-      const receivedToken = data.access_token || data.token || "demo-jwt-token";
+      const authenticatedUser = mapAuthUserData(data.user || {});
       setUser(authenticatedUser);
       setToken(receivedToken);
       setAuthUser(authenticatedUser);
@@ -247,22 +237,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: data.detail || "GitHub authentication failed" };
       }
 
-      const authenticatedUser: User = {
-        id: data.user?.id || `u-${Date.now()}`,
-        name: data.user?.name || data.user?.full_name || "GitHub User",
-        full_name: data.user?.full_name || data.user?.name,
-        email: data.user?.email || "",
-        avatar: data.user?.avatar || DEMO_AVATAR,
-        level: data.user?.level || 1,
-        xp: data.user?.xp || 100,
-        coins: data.user?.coins || 50,
-        department: data.user?.department || "Computer Science & Engineering",
-        college: data.user?.college || "Placement Candidate",
-        role: "SDE Aspirant",
-        gender: data.user?.gender || "",
-      };
+      const receivedToken = data.access_token || data.token;
+      if (!receivedToken) {
+        return { success: false, error: "Authentication failed: No access token received from server" };
+      }
 
-      const receivedToken = data.access_token || data.token || "demo-jwt-token";
+      const authenticatedUser = mapAuthUserData(data.user || {});
       setUser(authenticatedUser);
       setToken(receivedToken);
       setAuthUser(authenticatedUser);

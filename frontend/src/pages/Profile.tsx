@@ -126,9 +126,9 @@ export default function Profile() {
   const [languages, setLanguages] = useState<string[]>([]);
   const [newLang, setNewLang] = useState("");
 
-  // Hydrate form state whenever auth user updates
+  // Hydrate form state whenever auth user updates (guarded against active editing)
   useEffect(() => {
-    if (user) {
+    if (user && !isEditing) {
       setFormData({
         name: user.name || user.full_name || "",
         email: user.email || "",
@@ -155,7 +155,7 @@ export default function Profile() {
       setAvatarError(false);
       setBannerError(false);
     }
-  }, [user]);
+  }, [user, isEditing]);
 
   // Fetch genuine statistics for the user
   useEffect(() => {
@@ -189,7 +189,7 @@ export default function Profile() {
     };
 
     fetchProfileStats();
-  }, [user]);
+  }, [user?.id]);
 
   // Skill management
   const addSkill = () => {

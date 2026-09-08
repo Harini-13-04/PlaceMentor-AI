@@ -5,7 +5,7 @@ import { javascript } from "@codemirror/lang-javascript";
 import { java } from "@codemirror/lang-java";
 import { cpp } from "@codemirror/lang-cpp";
 import { sql } from "@codemirror/lang-sql";
-import { indentUnit, indentOnInput, bracketMatching } from "@codemirror/language";
+import { indentUnit, indentOnInput, bracketMatching, ensureSyntaxTree } from "@codemirror/language";
 import { defaultKeymap, historyKeymap, indentWithTab, insertNewlineAndIndent, indentMore, indentLess } from "@codemirror/commands";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { keymap, EditorView } from "@codemirror/view";
@@ -34,6 +34,7 @@ function createEditor(initialDoc: string, langExtension: any, indentStr: string 
     }),
     parent,
   });
+  ensureSyntaxTree(view.state, view.state.doc.length, 500);
   return view;
 }
 

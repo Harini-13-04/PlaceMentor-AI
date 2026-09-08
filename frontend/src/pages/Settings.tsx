@@ -23,8 +23,11 @@ export default function Settings() {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const initializedUserIdRef = React.useRef<string | null>(null);
+
   useEffect(() => {
-    if (user) {
+    if (user && initializedUserIdRef.current !== user.id) {
+      initializedUserIdRef.current = user.id;
       setName(user.name || user.full_name || "");
       setDepartment(user.department || "");
       setCollege(user.college || "");

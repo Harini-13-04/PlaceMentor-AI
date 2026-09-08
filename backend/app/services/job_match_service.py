@@ -352,7 +352,7 @@ def analyze_job_match(
         recommendations.append(JobMatchRecommendation(
             id="rec-match-skl-01",
             title="Address Potential Skill Gaps",
-            description=f"Skill not found in resume: {', '.join(missing_skills[:3])}. Add only if you genuinely have this experience.",
+            description=f"Potential skill gap: Skill not found in resume: {', '.join(missing_skills[:3])}. Only address if you genuinely have this experience.",
             severity="high" if len(missing_skills) >= 3 else "medium",
             section="skills",
             action="Fix in Resume"

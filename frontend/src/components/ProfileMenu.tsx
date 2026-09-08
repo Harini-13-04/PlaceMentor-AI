@@ -17,6 +17,12 @@ export default function ProfileMenu() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
+  const resolvedAvatar = user?.avatar
+    ? user.avatar.startsWith("http") || user.avatar.startsWith("data:")
+      ? user.avatar
+      : getMediaUrl(user.avatar)
+    : "";
+
   useEffect(() => {
     setAvatarError(false);
   }, [user?.avatar]);
@@ -55,10 +61,11 @@ export default function ProfileMenu() {
           title="View Profile"
           className="flex items-center gap-2.5 pl-2.5 pr-1.5 py-1.5 cursor-pointer text-left group"
         >
-          {user?.avatar ? (
+          {resolvedAvatar && !avatarError ? (
             <img
-              src={user.avatar}
+              src={resolvedAvatar}
               alt="Profile"
+              onError={() => setAvatarError(true)}
               className="w-7 h-7 rounded-full border border-purple-500/40 object-cover group-hover:scale-105 transition-transform"
             />
           ) : (
