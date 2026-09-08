@@ -1,8 +1,14 @@
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+import logging
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from app.database.mongodb import users_collection, learner_profiles_collection
 from app.models.user import User
 from app.core.security import hash_password, verify_password
+from app.core.config import GOOGLE_CLIENT_ID
+
+logger = logging.getLogger(__name__)
 
 
 async def create_user(
@@ -53,6 +59,60 @@ async def authenticate_user(email: str, password: str):
     if not verify_password(password, user_dict.get("password", "")):
         return None
     return user_dict
+
+
+async def authenticate_or_create_google_user(credential: str) -> Optional[Dict[str, Any]]:
+    try:
+        id_info = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID
+        )
+    except Exception as e:
+        logger.error(f"Failed to verify Google OAuth token: {e}")
+        return None
+
+    email = id_info.get("email")
+    if not email:
+        logger.error("No email in Google OAuth token payload")
+        return None
+
+    email = email.lower().strip()
+    name = (id_info.get("name") or "").strip() or email.split("@")[0]
+    picture = id_info.get("picture", "")
+
+    user_dict = await users_collection.find_one({"email": email})
+    if user_dict:
+        if picture and not user_dict.get("avatar"):
+            await users_collection.update_one(
+                {"email": email},
+                {"$set": {"avatar": picture, "updated_at": datetime.now(timezone.utc)}}
+            )
+            user_dict["avatar"] = picture
+        return user_dict
+
+    user = User(
+        name=name,
+        full_name=name,
+        email=email,
+        password=hash_password(f"google_oauth_{id_info.get('sub', '')}"),
+        college="",
+        department="",
+        year="",
+        skills=[],
+        gender="",
+        avatar=picture,
+        bio="",
+        phone="",
+        github="",
+        linkedin="",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    doc = user.model_dump()
+    await users_collection.insert_one(doc)
+    return doc
 
 
 async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:

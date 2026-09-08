@@ -12,3 +12,5 @@ starlette==0.46.2
 pypdf==6.17.0
 python-docx==1.2.0
 httpx==0.28.1
+google-auth>=2.0.0
+requests>=2.30.0

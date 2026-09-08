@@ -59,6 +59,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ResumeSelectionModal, ResumeFeatureType } from "@/components/ResumeSelectionModal";
 import { useAuth } from "@/context/AuthContext";
 import {
   getResumes,
@@ -116,8 +117,11 @@ export default function Resume() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active full-screen overlay view: null = main dashboard hub, "analysis" = full screen ATS analysis, "improve" = full screen AI studio, "defend" = full screen defend studio
-  const [activeView, setActiveView] = useState<"analysis" | "improve" | "defend" | null>(null);
+  // Active full-screen overlay view: null = main dashboard hub, "analysis" = full screen ATS analysis, "improve" = full screen AI studio, "defend" = full screen defend studio, "jobmatch" = full screen job match
+  const [activeView, setActiveView] = useState<"analysis" | "improve" | "defend" | "jobmatch" | null>(null);
+
+  // Resume Selection Modal state: "ats" | "improve" | "defend" | "customize" | null
+  const [selectionFeature, setSelectionFeature] = useState<ResumeFeatureType | null>(null);
 
   // Secondary Modals for Customize
   const [activeModal, setActiveModal] = useState<"customize" | null>(null);
@@ -192,13 +196,16 @@ export default function Resume() {
 
   // Job Description Matching State (Phase 2C)
   const [jobDescriptionInput, setJobDescriptionInput] = useState("");
+  const [jobTitleInput, setJobTitleInput] = useState("");
+  const [companyNameInput, setCompanyNameInput] = useState("");
   const [jobMatchResult, setJobMatchResult] = useState<JobMatchResponse | null>(null);
   const [isJobMatching, setIsJobMatching] = useState(false);
 
   const handleRunJobMatch = async () => {
-    const targetId = activeResume?.id || resumesList?.[0]?.id;
+    const targetId = activeResume?.id;
     if (!targetId) {
-      toast.error("Please create or select a resume first.");
+      toast.error("Please select a resume first.");
+      setSelectionFeature("customize");
       return;
     }
     if (!jobDescriptionInput || !jobDescriptionInput.trim()) {
@@ -212,7 +219,11 @@ export default function Resume() {
 
     setIsJobMatching(true);
     try {
-      const result = await matchJobDescription(targetId, jobDescriptionInput.trim());
+      const result = await matchJobDescription(targetId, {
+        job_description: jobDescriptionInput.trim(),
+        job_title: jobTitleInput.trim() || undefined,
+        company_name: companyNameInput.trim() || undefined,
+      });
       setJobMatchResult(result);
       toast.success("Job Description Match completed!");
     } catch (err: any) {
@@ -237,13 +248,15 @@ export default function Resume() {
   const [evaluationHistory, setEvaluationHistory] = useState<DefendClaimEvaluation[]>([]);
 
   const handleInitDefendSession = async (resumeIdOverride?: string) => {
-    const targetId = resumeIdOverride || activeResume?.id || resumesList?.[0]?.id;
+    const targetId = resumeIdOverride || activeResume?.id || defendSession?.resume_id || defendFinalReport?.resume_id;
     if (!targetId) {
-      toast.error("Please create or select a resume first.");
+      toast.error("The selected resume is no longer available. Please choose another resume.");
+      setSelectionFeature("defend");
       return;
     }
 
     setIsDefendInitLoading(true);
+    setDefendSession(null);
     setDefendFinalReport(null);
     setLastClaimEvaluation(null);
     setShowQuestionResult(false);
@@ -254,13 +267,23 @@ export default function Resume() {
     setActiveView("defend");
 
     try {
+      if (!activeResume || activeResume.id !== targetId) {
+        const fullData = await getResume(targetId);
+        setActiveResume(fullData);
+      }
       const res = await initDefendSession(targetId);
       setDefendSession(res);
       setCurrentDefendQuestion(res.first_question || "Explain your experience with this resume claim.");
       setCurrentDefendClaimId(res.first_claim_id || "");
       toast.success(`Defense session initialized! Identified ${res.total_claims} key claims.`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to initialize defense session.");
+      const errMsg = err?.message || "Failed to initialize defense session.";
+      if (err?.status === 404 || errMsg.includes("404") || errMsg.toLowerCase().includes("not found")) {
+        toast.error("This resume could not be found. Please select another resume.");
+        setSelectionFeature("defend");
+      } else {
+        toast.error(errMsg);
+      }
     } finally {
       setIsDefendInitLoading(false);
     }
@@ -707,6 +730,10 @@ export default function Resume() {
   const removeFile = () => setFileInfo(null);
 
   const openResumeEditor = async (id: string) => {
+    if (!id) {
+      toast.error("Please select a resume first.");
+      return;
+    }
     try {
       const fullData = await getResume(id);
       setActiveResume(fullData);
@@ -716,18 +743,51 @@ export default function Resume() {
     }
   };
 
-  const openAtsAnalysis = async (id?: string) => {
-    const targetId = id || activeResume?.id || resumesList?.[0]?.id;
-    if (!targetId) {
-      setIsCreateModalOpen(true);
+  const openAtsAnalysis = async (id: string) => {
+    if (!id) {
+      toast.error("Please select a resume first.");
       return;
     }
     try {
-      const fullData = await getResume(targetId);
+      const fullData = await getResume(id);
       setActiveResume(fullData);
       setActiveView("analysis");
     } catch (err: any) {
       toast.error("Failed to load resume for ATS analysis.");
+    }
+  };
+
+  const openJobMatchFlow = async (id: string) => {
+    if (!id) {
+      toast.error("Please select a resume first.");
+      return;
+    }
+    try {
+      const fullData = await getResume(id);
+      setActiveResume(fullData);
+      setJobMatchResult(null);
+      setJobDescriptionInput("");
+      setJobTitleInput("");
+      setCompanyNameInput("");
+      setActiveView("jobmatch");
+    } catch (err: any) {
+      toast.error("Failed to load resume for Job Match.");
+    }
+  };
+
+  const handleConfirmResumeSelection = async (selected: ResumeSummary) => {
+    const feat = selectionFeature;
+    setSelectionFeature(null);
+    if (!feat || !selected?.id) return;
+
+    if (feat === "ats") {
+      await openAtsAnalysis(selected.id);
+    } else if (feat === "improve") {
+      await openResumeEditor(selected.id);
+    } else if (feat === "defend") {
+      await handleInitDefendSession(selected.id);
+    } else if (feat === "customize") {
+      await openJobMatchFlow(selected.id);
     }
   };
 
@@ -1183,7 +1243,7 @@ export default function Resume() {
             aria-label="Add Resume"
           >
             <Plus className="w-4 h-4" />
-            <span>+ Add Resume</span>
+            <span>Add Resume</span>
           </button>
         </div>
 
@@ -1242,7 +1302,7 @@ export default function Resume() {
               aria-label="Add Resume"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Add Resume</span>
+              <span>Add Resume</span>
             </button>
           </div>
         ) : (
@@ -1294,7 +1354,7 @@ export default function Resume() {
                   </button>
 
                   <button
-                    onClick={() => openAtsAnalysis(res.id)}
+                    onClick={() => setSelectionFeature("ats")}
                     className="p-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 transition-colors"
                     title="View ATS Analysis"
                   >
@@ -1335,17 +1395,13 @@ export default function Resume() {
 
             const handleCardClick = () => {
               if (card.id === "analysis") {
-                openAtsAnalysis();
+                setSelectionFeature("ats");
               } else if (card.id === "improve") {
-                if (resumesList && resumesList.length > 0) {
-                  openResumeEditor(resumesList[0].id);
-                } else {
-                  setIsCreateModalOpen(true);
-                }
+                setSelectionFeature("improve");
               } else if (card.id === "defend") {
-                handleInitDefendSession();
-              } else {
-                setActiveModal(card.id as any);
+                setSelectionFeature("defend");
+              } else if (card.id === "customize") {
+                setSelectionFeature("customize");
               }
             };
 
@@ -1716,296 +1772,325 @@ export default function Resume() {
           document.body
         )}
 
-      {/* JOB DESCRIPTION MATCHING MODAL (PHASE 2C) */}
-      {activeModal === "customize" &&
+      {/* REUSABLE RESUME SELECTION MODAL */}
+      <ResumeSelectionModal
+        isOpen={!!selectionFeature}
+        feature={selectionFeature || "ats"}
+        onClose={() => setSelectionFeature(null)}
+        onConfirm={handleConfirmResumeSelection}
+        resumes={resumesList || []}
+        isLoadingResumes={isResumesLoading}
+        onCreateNewResume={() => setIsCreateModalOpen(true)}
+        onImportResume={() => {
+          setImportFile(null);
+          setImportError(null);
+          setIsImportModalOpen(true);
+        }}
+      />
+
+      {/* FULL-SCREEN OVERLAY: CUSTOMIZE FOR JOB / JOB MATCH */}
+      {activeView === "jobmatch" &&
         createPortal(
-          <div className="fixed inset-0 z-[10000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <div className="bg-[#0B0E24] border border-pink-500/30 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95">
-              {/* Header */}
-              <div className="p-6 border-b border-pink-500/20 bg-[#0F1332] flex items-center justify-between shrink-0">
+          <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[9999] bg-[#070814] text-slate-100 flex flex-col h-screen w-screen overflow-y-auto">
+            {/* Header */}
+            <header className="sticky top-0 z-50 h-16 px-4 sm:px-8 border-b border-pink-900/40 bg-[#0B0D1E] flex items-center justify-between gap-4 shrink-0 shadow-lg">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setActiveView(null)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 border border-pink-500/30 text-xs font-bold transition-all"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to Resume Tools</span>
+                </button>
+                <div className="h-5 w-px bg-slate-800 hidden sm:block" />
+                <span className="text-xs font-extrabold text-white flex items-center gap-2">
+                  <FileSearch className="w-4 h-4 text-pink-400" /> Customize for Job
+                </span>
+                {activeResume && (
+                  <span className="text-xs font-semibold text-pink-300 bg-pink-500/10 border border-pink-500/20 px-2.5 py-0.5 rounded-full">
+                    Resume: {activeResume.name}
+                  </span>
+                )}
+              </div>
+
+              <button onClick={() => setActiveView(null)} className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300">
+                <X className="w-5 h-5" />
+              </button>
+            </header>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+              {/* Selected Resume Details Banner */}
+              <div className="p-5 rounded-2xl bg-[#0F1332] border border-pink-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-pink-500/20 border border-pink-500/30 text-pink-400 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-pink-500/20 border border-pink-500/30 text-pink-400 flex items-center justify-center shrink-0">
                     <FileSearch className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-extrabold text-white flex items-center gap-2">
-                      Job Description Matching
+                    <h2 className="text-base font-extrabold text-white">
+                      Customize for Job: {activeResume?.name}
                     </h2>
                     <p className="text-xs text-slate-300">
-                      Evaluate target resume compatibility against a target job description deterministically.
+                      Target Role: <span className="text-pink-300 font-semibold">{activeResume?.target_role || "Software Engineer"}</span> • Experience: {activeResume?.experience_level}
                     </p>
                   </div>
                 </div>
 
                 <button
-                  onClick={() => setActiveModal(null)}
-                  className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+                  onClick={() => setSelectionFeature("customize")}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all shrink-0 self-start sm:self-auto"
                 >
-                  <X className="w-5 h-5" />
+                  Change Selected Resume
                 </button>
               </div>
 
-              {/* Scrollable Content */}
-              <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-100">
-                {/* Resume Selector & Input Form */}
-                <div className="p-5 rounded-2xl bg-[#111638] border border-pink-500/20 space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-pink-300 uppercase tracking-wider">Target Resume:</span>
-                      <select
-                        value={activeResume?.id || resumesList?.[0]?.id || ""}
-                        onChange={(e) => openResumeEditor(e.target.value)}
-                        className="p-2 rounded-lg bg-[#080A1A] border border-slate-700 text-xs text-white focus:border-pink-400"
-                      >
-                        {resumesList?.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} ({r.target_role})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-pink-500/10 text-pink-300 border border-pink-500/20">
-                      Deterministic Engine (0–100 Score)
-                    </span>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
-                      <span>Target Job Description Text *</span>
-                      <span className="text-[10px] text-slate-400">Max 20,000 chars</span>
-                    </label>
-                    <textarea
-                      rows={5}
-                      value={jobDescriptionInput}
-                      onChange={(e) => setJobDescriptionInput(e.target.value)}
-                      placeholder="Paste target job description requirements here...\n\ne.g., We are looking for a Senior Frontend Developer with React, TypeScript, Node.js, and REST API experience..."
-                      className="w-full p-3.5 rounded-xl bg-[#080B1E] border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-400 leading-relaxed"
-                    />
-                  </div>
-
-                  <div className="flex justify-end pt-1">
-                    <button
-                      onClick={handleRunJobMatch}
-                      disabled={isJobMatching}
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-pink-500/20 disabled:opacity-50 transition-all"
-                    >
-                      {isJobMatching ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Matching Skills & Keywords...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4" />
-                          <span>Analyze Job Match</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+              {/* Input Form Card */}
+              <div className="p-6 rounded-3xl bg-[#0D1028] border border-pink-500/30 space-y-4 shadow-2xl">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-200 flex items-center justify-between">
+                    <span>Target Job Description Text *</span>
+                    <span className="text-[10px] text-slate-400">Max 20,000 chars</span>
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={jobDescriptionInput}
+                    onChange={(e) => setJobDescriptionInput(e.target.value)}
+                    placeholder="Paste target job description requirements here...\n\ne.g., We are looking for a Senior Frontend Developer with React, TypeScript, Node.js, and REST API experience..."
+                    className="w-full p-4 rounded-2xl bg-[#060817] border border-slate-700/80 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-pink-400 leading-relaxed shadow-inner"
+                  />
                 </div>
 
-                {/* MATCH RESULTS DASHBOARD */}
-                {jobMatchResult && (
-                  <div className="space-y-6 animate-in fade-in pt-2">
-                    {/* Score Hero Banner */}
-                    <div className="p-6 rounded-2xl bg-gradient-to-r from-pink-950/40 via-purple-950/20 to-[#0A0D22] border border-pink-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xl">
-                      <div className="flex items-center gap-5">
-                        <div className="w-24 h-24 rounded-full bg-[#121636] border-4 border-pink-500/40 flex flex-col items-center justify-center text-center shrink-0 shadow-[0_0_25px_rgba(236,72,153,0.3)]">
-                          <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-purple-300 to-emerald-400">
-                            {jobMatchResult.overall_match_score}
-                          </span>
-                          <span className="text-[9px] font-bold text-slate-400 uppercase">/ 100 MATCH</span>
-                        </div>
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={handleRunJobMatch}
+                    disabled={isJobMatching}
+                    className="px-6 py-3 rounded-2xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-pink-500/20 disabled:opacity-50 transition-all hover:scale-105"
+                  >
+                    {isJobMatching ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Matching Skills & Keywords...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Analyze Job Match</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
 
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 inline-block">
-                            {jobMatchResult.overall_match_score >= 80
-                              ? "Strong Role Alignment (Top 10%)"
-                              : jobMatchResult.overall_match_score >= 60
-                              ? "Moderate Match (Requires Optimization)"
-                              : "Needs Alignment"}
-                          </span>
-                          <h3 className="text-xl font-bold text-white">
-                            Overall Match Score: {jobMatchResult.overall_match_score}%
-                          </h3>
-                          <p className="text-xs text-slate-300 max-w-md">
-                            Evaluated across Skills (35), Keywords (25), Experience (20), Projects (10), and Education/Certs (10).
-                          </p>
+              {/* Loading Indicator */}
+              {isJobMatching && (
+                <div className="p-12 flex flex-col items-center justify-center space-y-3 text-center">
+                  <Loader2 className="w-8 h-8 text-pink-400 animate-spin" />
+                  <p className="text-xs font-bold text-pink-300">
+                    Matching resume skills & keywords against job description...
+                  </p>
+                </div>
+              )}
+
+              {/* MATCH RESULTS DASHBOARD */}
+              {jobMatchResult && !isJobMatching && (
+                <div className="space-y-6 animate-in fade-in pt-2">
+                  {/* Score Hero Banner */}
+                  <div className="p-6 rounded-3xl bg-gradient-to-r from-pink-950/40 via-purple-950/20 to-[#0A0D22] border border-pink-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-xl">
+                    <div className="flex items-center gap-5">
+                      <div className="w-24 h-24 rounded-full bg-[#121636] border-4 border-pink-500/40 flex flex-col items-center justify-center text-center shrink-0 shadow-[0_0_25px_rgba(236,72,153,0.3)]">
+                        <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-purple-300 to-emerald-400">
+                          {jobMatchResult.overall_match_score}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">/ 100 MATCH</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-xs font-bold px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 inline-block">
+                          {jobMatchResult.overall_match_score >= 80
+                            ? "Strong Role Alignment (Top 10%)"
+                            : jobMatchResult.overall_match_score >= 60
+                            ? "Moderate Match (Requires Optimization)"
+                            : "Needs Alignment"}
+                        </span>
+                        <h3 className="text-xl font-bold text-white">
+                          Overall Match Score: {jobMatchResult.overall_match_score}%
+                        </h3>
+                        <p className="text-xs text-slate-300 max-w-md">
+                          Evaluated across Skills (35), Keywords (25), Experience (20), Projects (10), and Education/Certs (10).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 5 CATEGORY SCORES */}
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-pink-300 uppercase tracking-wider">
+                      Category Alignment Breakdown
+                    </h4>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      <div className="p-3.5 rounded-xl bg-[#111535] border border-pink-500/20 space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold text-pink-300">
+                          <span>Skills Match</span>
+                          <span className="text-white">{jobMatchResult.categories.skills_match}/35</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-pink-500 rounded-full" style={{ width: `${(jobMatchResult.categories.skills_match / 35) * 100}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#111535] border border-purple-500/20 space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold text-purple-300">
+                          <span>Keyword Match</span>
+                          <span className="text-white">{jobMatchResult.categories.keyword_match}/25</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(jobMatchResult.categories.keyword_match / 25) * 100}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#111535] border border-blue-500/20 space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold text-blue-300">
+                          <span>Experience</span>
+                          <span className="text-white">{jobMatchResult.categories.experience_alignment}/20</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(jobMatchResult.categories.experience_alignment / 20) * 100}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#111535] border border-teal-500/20 space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold text-teal-300">
+                          <span>Projects</span>
+                          <span className="text-white">{jobMatchResult.categories.project_domain_alignment}/10</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-teal-500 rounded-full" style={{ width: `${(jobMatchResult.categories.project_domain_alignment / 10) * 100}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-[#111535] border border-emerald-500/20 space-y-1.5">
+                        <div className="flex justify-between text-xs font-bold text-emerald-300">
+                          <span>Education/Cert</span>
+                          <span className="text-white">{jobMatchResult.categories.education_certification_alignment}/10</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(jobMatchResult.categories.education_certification_alignment / 10) * 100}%` }} />
                         </div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* 5 CATEGORY SCORES */}
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-bold text-pink-300 uppercase tracking-wider">
-                        Category Alignment Breakdown
+                  {/* MATCHED VS MISSING SKILLS */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2.5">
+                      <h4 className="font-extrabold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        Matched Technical Skills ({jobMatchResult.matched_skills.length})
+                      </h4>
+                      {jobMatchResult.matched_skills.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {jobMatchResult.matched_skills.map((sk, idx) => (
+                            <span key={idx} className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 text-[11px] font-bold">
+                              ✓ {sk}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 italic">No direct technical skill matches identified in resume.</p>
+                      )}
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
+                      <div className="space-y-1">
+                        <h4 className="font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                          Potential Skill Gaps ({jobMatchResult.missing_skills.length})
+                        </h4>
+                        <p className="text-[10px] text-amber-200/80 italic">
+                          Potential skill gap — only address this if you genuinely have this experience.
+                        </p>
+                      </div>
+                      {jobMatchResult.missing_skills.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {jobMatchResult.missing_skills.map((sk, idx) => (
+                            <span key={idx} className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40 text-[11px] font-medium">
+                              ? {sk}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-emerald-300 font-medium">No major missing technical skills detected!</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* KEYWORDS BREAKDOWN */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div className="p-4 rounded-2xl bg-[#111634] border border-slate-700/80 space-y-2">
+                      <span className="font-bold text-slate-300">Matched Context Keywords ({jobMatchResult.matched_keywords.length})</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {jobMatchResult.matched_keywords.map((kw, idx) => (
+                          <span key={idx} className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] border border-slate-700">
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-[#111634] border border-slate-700/80 space-y-2">
+                      <span className="font-bold text-slate-300">Missing Context Keywords ({jobMatchResult.missing_keywords.length})</span>
+                      <p className="text-[10px] text-slate-400 italic">
+                        Potential keyword to consider — only add it if you genuinely have this skill/experience.
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {jobMatchResult.missing_keywords.map((kw, idx) => (
+                          <span key={idx} className="px-2 py-0.5 rounded bg-slate-800/60 text-slate-400 text-[10px] border border-slate-800">
+                            {kw}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RECOMMENDATIONS WITH FIX IN RESUME */}
+                  {jobMatchResult.recommendations.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                      <h4 className="text-xs font-bold text-pink-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Wand2 className="w-4 h-4 text-pink-400" />
+                        Targeted Alignment Recommendations
                       </h4>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                        <div className="p-3.5 rounded-xl bg-[#111535] border border-pink-500/20 space-y-1.5">
-                          <div className="flex justify-between text-xs font-bold text-pink-300">
-                            <span>Skills Match</span>
-                            <span className="text-white">{jobMatchResult.categories.skills_match}/35</span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div className="h-full bg-pink-500 rounded-full" style={{ width: `${(jobMatchResult.categories.skills_match / 35) * 100}%` }} />
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#111535] border border-purple-500/20 space-y-1.5">
-                          <div className="flex justify-between text-xs font-bold text-purple-300">
-                            <span>Keyword Match</span>
-                            <span className="text-white">{jobMatchResult.categories.keyword_match}/25</span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${(jobMatchResult.categories.keyword_match / 25) * 100}%` }} />
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#111535] border border-blue-500/20 space-y-1.5">
-                          <div className="flex justify-between text-xs font-bold text-blue-300">
-                            <span>Experience</span>
-                            <span className="text-white">{jobMatchResult.categories.experience_alignment}/20</span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(jobMatchResult.categories.experience_alignment / 20) * 100}%` }} />
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#111535] border border-teal-500/20 space-y-1.5">
-                          <div className="flex justify-between text-xs font-bold text-teal-300">
-                            <span>Projects</span>
-                            <span className="text-white">{jobMatchResult.categories.project_domain_alignment}/10</span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div className="h-full bg-teal-500 rounded-full" style={{ width: `${(jobMatchResult.categories.project_domain_alignment / 10) * 100}%` }} />
-                          </div>
-                        </div>
-
-                        <div className="p-3.5 rounded-xl bg-[#111535] border border-emerald-500/20 space-y-1.5">
-                          <div className="flex justify-between text-xs font-bold text-emerald-300">
-                            <span>Education/Cert</span>
-                            <span className="text-white">{jobMatchResult.categories.education_certification_alignment}/10</span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(jobMatchResult.categories.education_certification_alignment / 10) * 100}%` }} />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* MATCHED VS MISSING SKILLS */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2.5">
-                        <h4 className="font-extrabold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          Matched Technical Skills ({jobMatchResult.matched_skills.length})
-                        </h4>
-                        {jobMatchResult.matched_skills.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {jobMatchResult.matched_skills.map((sk, idx) => (
-                              <span key={idx} className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-500/40 text-[11px] font-bold">
-                                ✓ {sk}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-slate-400 italic">No direct technical skill matches identified in resume.</p>
-                        )}
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
-                        <div className="space-y-1">
-                          <h4 className="font-extrabold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <AlertTriangle className="w-4 h-4 text-amber-400" />
-                            Potential Skill Gaps ({jobMatchResult.missing_skills.length})
-                          </h4>
-                          <p className="text-[10px] text-amber-200/80 italic">
-                            Potential skill gap — only address this if you genuinely have this experience.
-                          </p>
-                        </div>
-                        {jobMatchResult.missing_skills.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {jobMatchResult.missing_skills.map((sk, idx) => (
-                              <span key={idx} className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/40 text-[11px] font-medium">
-                                ? {sk}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-emerald-300 font-medium">No major missing technical skills detected!</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* KEYWORDS BREAKDOWN */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      <div className="p-4 rounded-2xl bg-[#111634] border border-slate-700/80 space-y-2">
-                        <span className="font-bold text-slate-300">Matched Context Keywords ({jobMatchResult.matched_keywords.length})</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {jobMatchResult.matched_keywords.map((kw, idx) => (
-                            <span key={idx} className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] border border-slate-700">
-                              {kw}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-2xl bg-[#111634] border border-slate-700/80 space-y-2">
-                        <span className="font-bold text-slate-300">Missing Context Keywords ({jobMatchResult.missing_keywords.length})</span>
-                        <p className="text-[10px] text-slate-400 italic">
-                          Potential keyword to consider — only add it if you genuinely have this skill/experience.
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {jobMatchResult.missing_keywords.map((kw, idx) => (
-                            <span key={idx} className="px-2 py-0.5 rounded bg-slate-800/60 text-slate-400 text-[10px] border border-slate-800">
-                              {kw}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* RECOMMENDATIONS WITH FIX IN RESUME */}
-                    {jobMatchResult.recommendations.length > 0 && (
-                      <div className="space-y-3 pt-2">
-                        <h4 className="text-xs font-bold text-pink-300 uppercase tracking-wider flex items-center gap-1.5">
-                          <Wand2 className="w-4 h-4 text-pink-400" />
-                          Targeted Alignment Recommendations
-                        </h4>
-
-                        <div className="space-y-3">
-                          {jobMatchResult.recommendations.map((rec) => (
-                            <div
-                              key={rec.id}
-                              className="p-4 rounded-2xl bg-[#111638] border border-pink-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
-                            >
-                              <div className="space-y-1 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 uppercase">
-                                    {rec.severity} priority
-                                  </span>
-                                  <h5 className="font-bold text-white">{rec.title}</h5>
-                                </div>
-                                <p className="text-slate-300 leading-relaxed">{rec.description}</p>
+                      <div className="space-y-3">
+                        {jobMatchResult.recommendations.map((rec) => (
+                          <div
+                            key={rec.id}
+                            className="p-4 rounded-2xl bg-[#111638] border border-pink-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs"
+                          >
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 uppercase">
+                                  {rec.severity} priority
+                                </span>
+                                <h5 className="font-bold text-white">{rec.title}</h5>
                               </div>
-
-                              <button
-                                onClick={() => handleFixInResume(rec.section)}
-                                className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs shrink-0 flex items-center justify-center gap-1.5 shadow-md"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span>Fix in Resume</span>
-                              </button>
+                              <p className="text-slate-300 leading-relaxed">{rec.description}</p>
                             </div>
-                          ))}
-                        </div>
+
+                            <button
+                              onClick={() => handleFixInResume(rec.section)}
+                              className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs shrink-0 flex items-center justify-center gap-1.5 shadow-md"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>Fix in Resume</span>
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>,
           document.body
@@ -2039,7 +2124,7 @@ export default function Resume() {
               <div className="flex items-center gap-2.5">
                 {defendSession && (
                   <button
-                    onClick={() => handleInitDefendSession()}
+                    onClick={() => handleInitDefendSession(defendSession?.resume_id || activeResume?.id)}
                     className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 flex items-center gap-1.5 transition-all"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -2095,7 +2180,7 @@ export default function Resume() {
 
                   <div className="flex justify-center pt-4">
                     <button
-                      onClick={() => handleInitDefendSession()}
+                      onClick={() => handleInitDefendSession(activeResume?.id || defendSession?.resume_id || resumesList?.[0]?.id)}
                       className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-violet-500 text-white font-extrabold text-sm flex items-center gap-3 shadow-xl shadow-blue-500/25 transition-all hover:scale-105"
                     >
                       <ShieldCheck className="w-5 h-5" />
@@ -2134,7 +2219,7 @@ export default function Resume() {
                       </div>
 
                       <button
-                        onClick={() => handleInitDefendSession()}
+                        onClick={() => handleInitDefendSession(defendSession?.resume_id || activeResume?.id)}
                         className="text-xs text-slate-400 hover:text-white underline flex items-center gap-1"
                       >
                         <RotateCcw className="w-3.5 h-3.5" /> Reset Session
@@ -2469,7 +2554,7 @@ export default function Resume() {
                   {/* ACTION BUTTONS */}
                   <div className="flex items-center justify-end gap-3 pt-3">
                     <button
-                      onClick={() => handleInitDefendSession()}
+                      onClick={() => handleInitDefendSession(defendFinalReport?.resume_id || defendSession?.resume_id || activeResume?.id)}
                       className="px-6 py-3 rounded-2xl bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-bold transition-all flex items-center gap-2"
                     >
                       <RotateCcw className="w-4 h-4" />
@@ -2839,6 +2924,26 @@ export default function Resume() {
                           type="text"
                           value={personalInfo.location}
                           onChange={(e) => updatePersonalInfoField("location", e.target.value)}
+                          className="w-full p-2.5 rounded-lg bg-[#080B1B] border border-slate-700 text-xs text-white focus:border-teal-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400">GitHub Profile</label>
+                        <input
+                          type="url"
+                          value={personalInfo.github || ""}
+                          onChange={(e) => updatePersonalInfoField("github", e.target.value)}
+                          placeholder="https://github.com/username"
+                          className="w-full p-2.5 rounded-lg bg-[#080B1B] border border-slate-700 text-xs text-white focus:border-teal-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400">LinkedIn Profile</label>
+                        <input
+                          type="url"
+                          value={personalInfo.linkedin || ""}
+                          onChange={(e) => updatePersonalInfoField("linkedin", e.target.value)}
+                          placeholder="https://linkedin.com/in/username"
                           className="w-full p-2.5 rounded-lg bg-[#080B1B] border border-slate-700 text-xs text-white focus:border-teal-400"
                         />
                       </div>
@@ -3472,6 +3577,18 @@ export default function Resume() {
                                 placeholder="Degree"
                                 className="p-2 rounded-lg bg-[#080B1B] border border-slate-700 text-xs text-white"
                               />
+                              <input
+                                type="text"
+                                value={edu.grade || edu.gpa || ""}
+                                onChange={(e) => {
+                                  if (!activeResume) return;
+                                  const updatedEdu = [...activeResume.education];
+                                  updatedEdu[idx] = { ...edu, grade: e.target.value, gpa: e.target.value };
+                                  triggerAutosave({ ...activeResume, education: updatedEdu });
+                                }}
+                                placeholder="Grade (e.g. 8.5 CGPA, 85%, 3.7 GPA)"
+                                className="p-2 rounded-lg bg-[#080B1B] border border-slate-700 text-xs text-white sm:col-span-2"
+                              />
                             </div>
                           </div>
                         ))}
@@ -3846,8 +3963,11 @@ export default function Resume() {
                                 </span>
                               )}
                             </div>
-                            {(edu.degree || edu.field_of_study) && (
-                              <p className="text-slate-700 italic">{edu.degree} {edu.field_of_study && `in ${edu.field_of_study}`}</p>
+                            {(edu.degree || edu.field_of_study || edu.grade || edu.gpa) && (
+                              <p className="text-slate-700 italic">
+                                {edu.degree} {edu.field_of_study && `in ${edu.field_of_study}`}
+                                {(edu.grade || edu.gpa) && <span className="not-italic text-slate-600 ml-2">• Grade: {edu.grade || edu.gpa}</span>}
+                              </p>
                             )}
                             {edu.description && <p className="text-slate-600 text-[10px]">{edu.description}</p>}
                           </div>

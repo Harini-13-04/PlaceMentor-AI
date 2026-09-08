@@ -35,7 +35,7 @@ async def get_worlds(current_user: Optional[dict] = Depends(get_optional_current
     worlds_with_status = []
     for w in WORLDS:
         w_copy = dict(w)
-        w_copy["is_unlocked"] = w["id"] in unlocked_set or w["unlock_level"] <= prog.get("player_level", 1)
+        w_copy["is_unlocked"] = w["id"] in unlocked_set
         worlds_with_status.append(w_copy)
 
     return {

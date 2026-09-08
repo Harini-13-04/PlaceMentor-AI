@@ -8,7 +8,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 import random
 import uuid
-from app.database.mongodb import assessment_attempts_collection
+from app.database.mongodb import assessment_attempts_collection, aptitude_progress_collection
+
 
 # =========================================================================
 # TOPIC CONCEPTS & FORMULA CHEAT SHEETS
@@ -755,6 +756,27 @@ async def submit_assessment_attempt(
     await assessment_attempts_collection.insert_one(attempt_doc)
     attempt_doc.pop("_id", None)
 
+    # Persist topic attempt counts & accuracy into user aptitude progress
+    try:
+        await aptitude_progress_collection.update_one(
+            {"user_id": user_id},
+            {
+                "$inc": {
+                    f"topics.{topic}.attempted": total,
+                    f"topics.{topic}.correct": score,
+                    "total_questions_attempted": total,
+                    "total_questions_correct": score,
+                },
+                "$set": {
+                    f"topics.{topic}.last_accuracy": accuracy,
+                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                }
+            },
+            upsert=True
+        )
+    except Exception as e:
+        print(f"Error updating aptitude progress for user {user_id}: {e}")
+
     return attempt_doc
 
 
@@ -774,3 +796,42 @@ async def get_user_assessment_history(user_id: str, assessment_type: Optional[st
             except Exception:
                 pass
     return attempts
+
+
+async def mark_concept_learned(user_id: str, concept_name: str, category: str) -> Dict[str, Any]:
+    """
+    Marks a concept as learned for the authenticated user in MongoDB.
+    """
+    doc = await aptitude_progress_collection.find_one({"user_id": user_id})
+    learned_set = set(doc.get("learned_concepts", [])) if doc else set()
+    learned_set.add(concept_name)
+
+    await aptitude_progress_collection.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {
+                "learned_concepts": list(learned_set),
+                f"topics.{concept_name}.learned": True,
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+        upsert=True
+    )
+    return {"status": "success", "concept": concept_name, "learned_concepts": list(learned_set)}
+
+
+async def get_user_aptitude_progress(user_id: str) -> Dict[str, Any]:
+    """
+    Retrieves real aptitude progress (learned concepts, topic question stats) for user.
+    """
+    doc = await aptitude_progress_collection.find_one({"user_id": user_id}, {"_id": 0})
+    if not doc:
+        return {
+            "user_id": user_id,
+            "learned_concepts": [],
+            "topics": {},
+            "total_questions_attempted": 0,
+            "total_questions_correct": 0,
+        }
+    return doc
+

@@ -77,12 +77,16 @@ class GDParticipant(BaseModel):
     is_connected: bool = True
     joined_at: str
     is_speaking: bool = False
+    team: Optional[str] = None
+    total_speaking_seconds: float = 0.0
+    turn_count: int = 0
+    last_turn_at: Optional[str] = None
 
 
 class GDRoomCreateRequest(BaseModel):
     topic: str = Field(..., max_length=500, description="Discussion topic or title")
     max_participants: Optional[int] = Field(6, ge=2, le=10, description="Maximum number of allowed participants")
-    duration_minutes: Optional[int] = Field(15, ge=1, le=60, description="Discussion duration in minutes")
+    duration_minutes: Optional[int] = Field(5, ge=1, le=60, description="Discussion duration in minutes")
 
 
 class GDRoomJoinRequest(BaseModel):
@@ -92,20 +96,59 @@ class GDRoomJoinRequest(BaseModel):
 class GDRoomResponse(BaseModel):
     room_id: str
     topic: str
-    status: Literal["waiting", "active", "ended"] = "waiting"
+    status: Literal["waiting", "active", "evaluating", "ended"] = "waiting"
     host_user_id: str
     max_participants: int = 6
+    min_participants: int = 2
     created_at: str
     started_at: Optional[str] = None
     ended_at: Optional[str] = None
-    duration_seconds: int = 900
+    duration_seconds: int = 300
+    discussion_ends_at: Optional[str] = None
     participants: List[GDParticipant] = Field(default_factory=list)
+    teams: dict[str, List[str]] = Field(default_factory=dict)
+    current_speaker_id: Optional[str] = None
+    current_speaker_name: Optional[str] = None
+    next_speaker_id: Optional[str] = None
     is_host: bool = False
+    evaluation_summary: Optional[dict] = None
+    winning_team: Optional[str] = None
 
 
 class GDDimensionDetail(BaseModel):
     score: Optional[int] = Field(None, description="Score 0-100 if evidence available, otherwise null")
     reason: str = Field(..., description="Defensible rationale or limitation message")
+
+
+class GDParticipantEvalItem(BaseModel):
+    user_id: str
+    display_name: str
+    team: str
+    overall_score: Optional[int] = None
+    speaking_seconds: float = 0.0
+    turn_count: int = 0
+    fluency: Optional[int] = None
+    clarity: Optional[int] = None
+    pace: Optional[int] = None
+    topic_relevance: Optional[int] = None
+    reasoning: Optional[int] = None
+    communication: Optional[int] = None
+    transcript: str = ""
+    strengths: List[str] = Field(default_factory=list)
+    improvements: List[str] = Field(default_factory=list)
+
+
+class GDTeamEvalItem(BaseModel):
+    team_name: str
+    members: List[str] = Field(default_factory=list)
+    team_score: int = 0
+    avg_communication_score: int = 0
+    argument_quality: int = 0
+    collaboration_score: int = 0
+    total_speaking_seconds: float = 0.0
+    total_turns: int = 0
+    strengths: List[str] = Field(default_factory=list)
+    weaknesses: List[str] = Field(default_factory=list)
 
 
 class GDEvaluationResponse(BaseModel):
@@ -118,6 +161,11 @@ class GDEvaluationResponse(BaseModel):
     strengths: List[str] = Field(default_factory=list)
     suggestions: List[str] = Field(default_factory=list)
     data_limitations: List[str] = Field(default_factory=list)
+    winning_team: Optional[str] = None
+    winning_rationale: Optional[str] = None
+    team_evaluations: dict[str, GDTeamEvalItem] = Field(default_factory=dict)
+    participant_evaluations: List[GDParticipantEvalItem] = Field(default_factory=list)
     created_at: str
+
 
 

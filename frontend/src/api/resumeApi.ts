@@ -19,6 +19,7 @@ export interface EducationItem {
   end_date: string;
   current: boolean;
   gpa: string;
+  grade?: string;
   description: string;
 }
 
@@ -272,6 +273,8 @@ export async function analyzeATS(id: string): Promise<ATSAnalysisResponse> {
 
 export interface JobMatchRequest {
   job_description: string;
+  job_title?: string;
+  company_name?: string;
 }
 
 export interface JobMatchCategories {
@@ -293,12 +296,19 @@ export interface JobMatchRecommendation {
 
 export interface JobMatchResponse {
   resume_id: string;
+  resume_name?: string;
+  job_title?: string;
+  company_name?: string;
   overall_match_score: number;
   categories: JobMatchCategories;
   matched_skills: string[];
   missing_skills: string[];
   matched_keywords: string[];
   missing_keywords: string[];
+  experience_alignment_note?: string;
+  project_relevance_note?: string;
+  education_certification_note?: string;
+  relevant_projects?: string[];
   strengths: string[];
   gaps: string[];
   recommendations: JobMatchRecommendation[];
@@ -307,11 +317,12 @@ export interface JobMatchResponse {
 
 export async function matchJobDescription(
   id: string,
-  jobDescription: string
+  data: JobMatchRequest | string
 ): Promise<JobMatchResponse> {
+  const body = typeof data === "string" ? { job_description: data } : data;
   return apiRequest<JobMatchResponse>(`/api/resumes/${id}/job-match`, {
     method: "POST",
-    body: JSON.stringify({ job_description: jobDescription }),
+    body: JSON.stringify(body),
   });
 }
 
